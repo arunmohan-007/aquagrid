@@ -1,0 +1,590 @@
+[
+  {
+    "id": "maki-barrier",
+    "file": "maki/barrier.svg",
+    "name": "Barrier",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-bridge",
+    "file": "maki/bridge.svg",
+    "name": "Bridge",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-building",
+    "file": "maki/building.svg",
+    "name": "Building",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-caution",
+    "file": "maki/caution.svg",
+    "name": "Caution",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-charging-station",
+    "file": "maki/charging-station.svg",
+    "name": "Charging Station",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-circle",
+    "file": "maki/circle.svg",
+    "name": "Circle",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-circle-stroked",
+    "file": "maki/circle-stroked.svg",
+    "name": "Circle Outline",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-city",
+    "file": "maki/city.svg",
+    "name": "City",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-commercial",
+    "file": "maki/commercial.svg",
+    "name": "Commercial",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-communications-tower",
+    "file": "maki/communications-tower.svg",
+    "name": "Communications Tower",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-construction",
+    "file": "maki/construction.svg",
+    "name": "Construction",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-cross",
+    "file": "maki/cross.svg",
+    "name": "Cross",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-dam",
+    "file": "maki/dam.svg",
+    "name": "Dam",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-danger",
+    "file": "maki/danger.svg",
+    "name": "Danger",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-diamond",
+    "file": "maki/diamond.svg",
+    "name": "Diamond",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-drinking-water",
+    "file": "maki/drinking-water.svg",
+    "name": "Drinking Water",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-entrance",
+    "file": "maki/entrance.svg",
+    "name": "Entrance",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-farm",
+    "file": "maki/farm.svg",
+    "name": "Farm",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-fence",
+    "file": "maki/fence.svg",
+    "name": "Fence",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-fire-station",
+    "file": "maki/fire-station.svg",
+    "name": "Fire Station",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-garden",
+    "file": "maki/garden.svg",
+    "name": "Garden",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-gate",
+    "file": "maki/gate.svg",
+    "name": "Gate",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-globe",
+    "file": "maki/globe.svg",
+    "name": "Globe",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-harbor",
+    "file": "maki/harbor.svg",
+    "name": "Harbour",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-hardware",
+    "file": "maki/hardware.svg",
+    "name": "Hardware",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-heart",
+    "file": "maki/heart.svg",
+    "name": "Heart",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-home",
+    "file": "maki/home.svg",
+    "name": "Home",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-hospital",
+    "file": "maki/hospital.svg",
+    "name": "Hospital",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-road-accident",
+    "file": "maki/road-accident.svg",
+    "name": "Incident",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-industry",
+    "file": "maki/industry.svg",
+    "name": "Industry",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-information",
+    "file": "maki/information.svg",
+    "name": "Information",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-lift-gate",
+    "file": "maki/lift-gate.svg",
+    "name": "Lift Gate",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-logging",
+    "file": "maki/logging.svg",
+    "name": "Logging",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-marker",
+    "file": "maki/marker.svg",
+    "name": "Marker",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-marker-stroked",
+    "file": "maki/marker-stroked.svg",
+    "name": "Marker Outline",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-mountain",
+    "file": "maki/mountain.svg",
+    "name": "Mountain",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-park",
+    "file": "maki/park.svg",
+    "name": "Park",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-police",
+    "file": "maki/police.svg",
+    "name": "Police",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-rail",
+    "file": "maki/rail.svg",
+    "name": "Rail",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-recycling",
+    "file": "maki/recycling.svg",
+    "name": "Recycling",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-residential-community",
+    "file": "maki/residential-community.svg",
+    "name": "Residential",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-roadblock",
+    "file": "maki/roadblock.svg",
+    "name": "Roadblock",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-school",
+    "file": "maki/school.svg",
+    "name": "School",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-slipway",
+    "file": "maki/slipway.svg",
+    "name": "Slipway",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-square",
+    "file": "maki/square.svg",
+    "name": "Square",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-square-stroked",
+    "file": "maki/square-stroked.svg",
+    "name": "Square Outline",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-star",
+    "file": "maki/star.svg",
+    "name": "Star",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-star-stroked",
+    "file": "maki/star-stroked.svg",
+    "name": "Star Outline",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-swimming",
+    "file": "maki/swimming.svg",
+    "name": "Swimming",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-observation-tower",
+    "file": "maki/observation-tower.svg",
+    "name": "Tower",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-town",
+    "file": "maki/town.svg",
+    "name": "Town",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-town-hall",
+    "file": "maki/town-hall.svg",
+    "name": "Town Hall",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-triangle",
+    "file": "maki/triangle.svg",
+    "name": "Triangle",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-triangle-stroked",
+    "file": "maki/triangle-stroked.svg",
+    "name": "Triangle Outline",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-tunnel",
+    "file": "maki/tunnel.svg",
+    "name": "Tunnel",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-village",
+    "file": "maki/village.svg",
+    "name": "Village",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-warehouse",
+    "file": "maki/warehouse.svg",
+    "name": "Warehouse",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-water",
+    "file": "maki/water.svg",
+    "name": "Water",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-waterfall",
+    "file": "maki/waterfall.svg",
+    "name": "Waterfall",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-watermill",
+    "file": "maki/watermill.svg",
+    "name": "Watermill",
+    "set": "MAKI"
+  },
+  {
+    "id": "maki-wetland",
+    "file": "maki/wetland.svg",
+    "name": "Wetland",
+    "set": "MAKI"
+  },
+  {
+    "id": "material-warning_amber",
+    "file": "material/warning_amber.svg",
+    "name": "Alert",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-apartment",
+    "file": "material/apartment.svg",
+    "name": "Apartment",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-my_location",
+    "file": "material/my_location.svg",
+    "name": "Current Location",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-energy_savings_leaf",
+    "file": "material/energy_savings_leaf.svg",
+    "name": "Efficiency",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-electric_meter",
+    "file": "material/electric_meter.svg",
+    "name": "Electric Meter",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-electric_bolt",
+    "file": "material/electric_bolt.svg",
+    "name": "Electrical",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-electrical_services",
+    "file": "material/electrical_services.svg",
+    "name": "Electrical Service",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-engineering",
+    "file": "material/engineering.svg",
+    "name": "Engineering",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-handyman",
+    "file": "material/handyman.svg",
+    "name": "Field Work",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-speed",
+    "file": "material/speed.svg",
+    "name": "Flow",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-home",
+    "file": "material/home.svg",
+    "name": "House Connection",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-location_on",
+    "file": "material/location_on.svg",
+    "name": "Location",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-home_repair_service",
+    "file": "material/home_repair_service.svg",
+    "name": "Maintenance",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-gas_meter",
+    "file": "material/gas_meter.svg",
+    "name": "Meter",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-location_city",
+    "file": "material/location_city.svg",
+    "name": "Municipality",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-opacity",
+    "file": "material/opacity.svg",
+    "name": "Opacity",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-offline_bolt",
+    "file": "material/offline_bolt.svg",
+    "name": "Outage",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-place",
+    "file": "material/place.svg",
+    "name": "Place",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-plumbing",
+    "file": "material/plumbing.svg",
+    "name": "Plumbing",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-bolt",
+    "file": "material/bolt.svg",
+    "name": "Power",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-power",
+    "file": "material/power.svg",
+    "name": "Power Supply",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-business",
+    "file": "material/business.svg",
+    "name": "Premises",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-shutter_speed",
+    "file": "material/shutter_speed.svg",
+    "name": "Pressure",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-heat_pump",
+    "file": "material/heat_pump.svg",
+    "name": "Pump",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-science",
+    "file": "material/science.svg",
+    "name": "Sampling",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-sensors",
+    "file": "material/sensors.svg",
+    "name": "Sensor",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-share_location",
+    "file": "material/share_location.svg",
+    "name": "Shared Location",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-solar_power",
+    "file": "material/solar_power.svg",
+    "name": "Solar",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-propane_tank",
+    "file": "material/propane_tank.svg",
+    "name": "Tank",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-factory",
+    "file": "material/factory.svg",
+    "name": "Treatment Plant",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-warning",
+    "file": "material/warning.svg",
+    "name": "Warning",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-water_damage",
+    "file": "material/water_damage.svg",
+    "name": "Water Damage",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-water_drop",
+    "file": "material/water_drop.svg",
+    "name": "Water Drop",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-water",
+    "file": "material/water.svg",
+    "name": "Water Level",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-waves",
+    "file": "material/waves.svg",
+    "name": "Waves",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-wind_power",
+    "file": "material/wind_power.svg",
+    "name": "Wind",
+    "set": "MATERIAL"
+  },
+  {
+    "id": "material-build",
+    "file": "material/build.svg",
+    "name": "Works",
+    "set": "MATERIAL"
+  }
+]

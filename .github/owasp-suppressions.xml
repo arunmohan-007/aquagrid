@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AquaGrid — OWASP dependency-check false-positive suppressions.
+
+  Each entry pins a specific CVE to a specific dependency version with a reason. Suppressing by
+  wildcard ("suppress any CVE on any artifact") is forbidden: it hides real findings. An entry
+  here is a documented decision that a reported CVE does not apply, with the evidence.
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+
+    <!--
+      Example pattern (left as a template; populate with real entries as the scan matures):
+
+      <suppress>
+          <packageUrl regex="true">^pkg:maven/org\.springframework\.boot/spring-boot-starter.*$</packageUrl>
+          <cve>CVE-2024-XXXXX</cve>
+          <cve>CVE-2024-YYYYY</cve>
+          <notes>
+              Not exploitable in AquaGrid: we do not expose the affected endpoint / the vulnerable
+              feature is disabled by config. Re-evaluate on each Spring Boot upgrade.
+          </notes>
+      </suppress>
+    -->
+
+</suppressions>

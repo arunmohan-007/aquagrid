@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.aquagrid</groupId>
+        <artifactId>aquagrid-platform</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>module-iot</artifactId>
+    <name>AquaGrid :: IoT Module</name>
+    <description>Devices, the transport-agnostic ingestion port, and telemetry (Modules 6, 7, 18)</description>
+
+    <dependencies>
+        <!--
+            Depends on platform-common only for ingestion. The simulator (Phase 6) additionally
+            depends on module-identity to resolve the tenant to simulate against — but strictly
+            through the published api package (IdentityApi), never identity internals. This keeps
+            the IoT ingestion tier extractable; only the simulator needs identity, and the
+            simulator is optional (off by default).
+        -->
+        <dependency>
+            <groupId>com.aquagrid</groupId>
+            <artifactId>platform-common</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.aquagrid</groupId>
+            <artifactId>platform-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.aquagrid</groupId>
+            <artifactId>module-identity</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+        </dependency>
+
+        <!--
+            Report generation (Module 25). Both write to an OutputStream incrementally, which is
+            what lets an export of a year's readings stream to the client instead of being
+            assembled in memory first — the difference between a bounded server and one a single
+            date range can exhaust.
+        -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+        </dependency>
+        <!--
+            Micrometer's API only. The registry implementation and the Actuator endpoints that
+            expose it belong to app-bootstrap; the receiver records against MeterRegistry and does
+            not care whether the deployment scrapes Prometheus, ships OTLP or does neither.
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+        </dependency>
+    </dependencies>
+</project>

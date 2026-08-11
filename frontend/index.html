@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0A0E1A" />
+    <meta name="description" content="AquaGrid — Enterprise Smart Water Management Platform" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>AquaGrid — Smart Water Management</title>
+    <script>
+      /*
+       * Pins the colour scheme before the first paint.
+       *
+       * The product is dark-only, so this no longer reads localStorage or sniffs
+       * prefers-color-scheme — it sets `data-mui-color-scheme="dark"` synchronously so the
+       * browser never paints a light frame. It must stay inline because any deferred script
+       * runs after the first paint.
+       */
+      document.documentElement.setAttribute('data-mui-color-scheme', 'dark');
+      document.documentElement.style.colorScheme = 'dark';
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

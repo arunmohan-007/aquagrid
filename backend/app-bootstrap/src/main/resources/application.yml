@@ -1,0 +1,348 @@
+# =====================================================================================
+# AquaGrid — base configuration
+#
+# Secure by default. Every value that could weaken security is either absent (so the
+# application refuses to start until it is supplied) or set to its safe setting, and is
+# relaxed only in the explicitly-named development profile.
+# =====================================================================================
+
+spring:
+  application:
+    name: aquagrid-platform
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+
+  threads:
+    virtual:
+      # Java 21 virtual threads: this workload is overwhelmingly I/O bound (database,
+      # GeoServer, MQTT, SCADA), so we get reactive-grade concurrency from blocking,
+      # debuggable, stack-traced code.
+      enabled: true
+
+  datasource:
+    # stringtype=unspecified is REQUIRED, not a tuning knob. The domain models client IPs as
+    # String against inet columns; without it the driver binds varchar and PostgreSQL refuses
+    # the insert, because there is no implicit varchar -> inet cast. A DB_URL supplied from the
+    # environment must carry the same parameter.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/aquagrid?stringtype=unspecified}
+    username: ${DB_USERNAME:aquagrid}
+    password: ${DB_PASSWORD:}
+    hikari:
+      pool-name: aquagrid-pool
+      maximum-pool-size: ${DB_POOL_MAX:20}
+      minimum-idle: ${DB_POOL_MIN:5}
+      connection-timeout: 10000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      # Fail fast on a bad connection rather than serving 500s for a minute.
+      initialization-fail-timeout: 10000
+      auto-commit: false
+
+  jpa:
+    # Hibernate never emits DDL, in any environment. Flyway owns the schema, exclusively.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 50
+          time_zone: UTC
+        order_inserts: true
+        order_updates: true
+        query:
+          in_clause_parameter_padding: true
+          fail_on_pagination_over_collection_fetch: true
+        # Surfaces N+1 selects during development instead of in a production incident.
+        generate_statistics: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    # Every module's migration folder must be listed. A module whose folder is missing here has
+    # its entities validated against tables that were never created, and the application will not
+    # start against a fresh database.
+    locations:
+      - classpath:db/migration/core
+      - classpath:db/migration/identity
+      - classpath:db/migration/gis
+      - classpath:db/migration/iot
+    placeholders:
+      appSchema: identity
+
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: UTC
+
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
+
+server:
+  port: ${SERVER_PORT:8080}
+  # Never advertise the server implementation.
+  server-header:
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+  compression:
+    enabled: true
+    mime-types: application/json,application/problem+json,application/geo+json,text/css,application/javascript
+    min-response-size: 2048
+  tomcat:
+    max-http-form-post-size: 2MB
+    # Required so Tomcat honours X-Forwarded-* only from the proxy we terminate behind.
+    remoteip:
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: aquagrid-platform
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+
+# =====================================================================================
+# Platform configuration
+# =====================================================================================
+aquagrid:
+  web:
+    # CIDRs of reverse proxies whose X-Forwarded-For may be believed. EMPTY BY DEFAULT:
+    # with no entry, forwarding headers are ignored and the TCP peer address is used, so
+    # a directly-exposed deployment cannot be spoofed. Set this to the load balancer's
+    # subnet — never to 0.0.0.0/0.
+    trusted-proxies: ${TRUSTED_PROXIES:}
+    cors-origins: ${CORS_ORIGINS:}
+    cors-exposed-headers: X-Request-Id
+
+  crypto:
+    # Base64-encoded 256-bit key for field-level encryption (TOTP seeds, device secrets).
+    # Generate with: openssl rand -base64 32
+    master-key: ${AQUAGRID_MASTER_KEY:}
+
+  openapi:
+    expose-ui: ${OPENAPI_UI:false}
+    server-url: ${OPENAPI_SERVER_URL:/}
+
+  security:
+    jwt:
+      issuer: ${JWT_ISSUER:https://aquagrid.local}
+      audience: ${JWT_AUDIENCE:aquagrid-api}
+      # An access token cannot be revoked, so its lifetime is the revocation window.
+      access-token-ttl: 15m
+      mfa-token-ttl: 5m
+      reset-token-ttl: 30m
+      invitation-ttl: 7d
+      key-id: ${JWT_KEY_ID:aquagrid-signing-key}
+      private-key-pem: ${JWT_PRIVATE_KEY:}
+      public-key-pem: ${JWT_PUBLIC_KEY:}
+
+  identity:
+    app-base-url: ${APP_BASE_URL:https://localhost:5173}
+    lockout:
+      max-failed-attempts: 5
+      duration: 15m
+      multiplier: 2
+      max-duration: 4h
+    refresh-token:
+      ttl: 14d
+      cookie-name: ag_rt
+      secure: ${REFRESH_COOKIE_SECURE:true}
+      path: /api/v1/auth
+      same-site: Strict
+      domain: ${REFRESH_COOKIE_DOMAIN:}
+      cleanup-grace-period: 7d
+      cleanup-cron: "0 30 3 * * *"
+      max-sessions-per-user: 10
+    rate-limit:
+      login-attempts-per-ip: 30
+      login-attempts-per-identifier: 10
+      window: 5m
+      password-reset-per-ip: 5
+      password-reset-window: 1h
+    password:
+      min-length: 12
+      max-length: 128
+      require-uppercase: true
+      require-lowercase: true
+      require-digit: true
+      require-special: true
+      history-depth: 5
+      # 0 = no forced expiry. NIST SP 800-63B advises against periodic rotation; raise this
+      # only where a customer's policy mandates it.
+      max-age-days: 0
+    mfa:
+      issuer: AquaGrid
+      recovery-codes: 10
+    bootstrap:
+      organization-code: SYSTEM
+      username: ${AQUAGRID_BOOTSTRAP_ADMIN_USERNAME:admin}
+      email: ${AQUAGRID_BOOTSTRAP_ADMIN_EMAIL:admin@aquagrid.local}
+      full-name: ${AQUAGRID_BOOTSTRAP_ADMIN_NAME:Platform Administrator}
+      # No default. Without it, no administrator is created and the startup log says so.
+      password: ${AQUAGRID_BOOTSTRAP_ADMIN_PASSWORD:}
+
+  # ---- GIS vector tiles (Module 4) --------------------------------------------------------
+  # Tiles are generated per request by PostGIS (ST_TileEnvelope -> ST_AsMVTGeom -> ST_AsMVT) and
+  # never written to disk, so there is no tile cache to seed, warm or invalidate — only how the
+  # geometry is quantised and how long a client may reuse a response.
+  gis:
+    tile:
+      # The MVT coordinate grid. 4096 is the specification's default and what every client assumes.
+      extent: ${GIS_TILE_EXTENT:4096}
+      # Margin, in tile units, kept outside the envelope before clipping. Without it a pipe shows a
+      # hairline gap at every tile boundary and a label anchored near an edge is dropped by both
+      # neighbours. Raise towards 64 for wide polygons with labels; it costs bytes in every tile.
+      buffer: ${GIS_TILE_BUFFER:8}
+      # Cache lifetimes, chosen per layer by Layer Management's `editable` flag: operational layers
+      # staff edit during a shift get the short one, reference layers the long one.
+      dynamic-cache-max-age: ${GIS_TILE_CACHE_DYNAMIC:5m}
+      static-cache-max-age: ${GIS_TILE_CACHE_STATIC:6h}
+
+  # ---- IoT transports (Module 6/18) -------------------------------------------------------
+  # Each transport is independently activatable. A municipality running only NB-IoT never loads
+  # the MQTT client or the LoRaWAN route. The simulator is its own transport so a deployment can
+  # generate traffic without any real devices.
+  iot:
+    transports:
+      http:
+        enabled: ${IOT_HTTP_ENABLED:true}
+      lorawan:
+        enabled: ${IOT_LORAWAN_ENABLED:false}
+      nbiot:
+        enabled: ${IOT_NBIOT_ENABLED:false}
+      cellular:
+        enabled: ${IOT_CELLULAR_ENABLED:false}
+      mqtt:
+        enabled: ${IOT_MQTT_ENABLED:false}
+        endpoint: ${MQTT_BROKER_URL:tcp://localhost:1883}
+      simulator: ${IOT_SIMULATOR_ENABLED:false}
+
+    # Phase-5 webhook that called TelemetryIngestPort directly. Off everywhere by default — the
+    # production path is POST /api/v1/receiver/http. ProductionReadinessVerifier refuses to boot a
+    # non-development profile with this set true.
+    legacy-http-ingest:
+      enabled: ${IOT_LEGACY_HTTP_INGEST_ENABLED:false}
+
+    # ---- Fleet simulator (Module 17) ------------------------------------------------------
+    # Drives registered devices whose source is SIMULATOR, emitting through the receiver exactly
+    # as a physical device does — same registry rows, same addresses, same credentials, same wire
+    # formats, same pipeline, same tables. Replacing a simulated meter with a real one is a change
+    # to the device's `source` column and nothing else.
+    #
+    # Switched on by `transports.simulator` above, not here; this block only governs behaviour.
+    simulator:
+      organization-code: ${SIMULATOR_ORG_CODE:SYSTEM}
+      # How often the fleet reports. A device may override it for itself with a
+      # `reportingIntervalSeconds` attribute — a battery LoRaWAN meter on six hours and a mains
+      # logger on five minutes are genuinely different duty cycles, and a fleet reporting in
+      # lockstep would give silence detection a uniformity no real estate has.
+      interval: ${SIMULATOR_INTERVAL:1m}
+      initial-delay: 15s
+      # A device registered while the simulator runs joins within this window.
+      fleet-refresh: 5m
+      # False leaves the fleet loaded but silent, which is what a validation run wants: nothing is
+      # written until an operator asks for it.
+      auto-start: ${SIMULATOR_AUTO_START:true}
+      # Presented when a device carries no credential of its own, standing in for the network
+      # server or carrier webhook that will deliver the physical devices' packets. Checked against
+      # the same configured hash that gateway will be, so a fleet that authenticates here still
+      # authenticates after cutover. Empty means no credential is presented and the receiver
+      # refuses the packet exactly as it would refuse an uncredentialed real device.
+      gateway-api-key: ${SIMULATOR_GATEWAY_API_KEY:}
+      # Spontaneous fault rates, per simulated hour — independent of the reporting interval, so
+      # shortening it to watch a dashboard makes the fleet report more often, not break more often.
+      # Set them all to zero for a deterministic run in which the only anomalies are injected ones.
+      faults:
+        leak: 0.002
+        burst: 0.0002
+        comms-loss: 0.005
+        tamper: 0.0001
+
+    # ---- Receiver (Module 18) -------------------------------------------------------------
+    # The single entry point for inbound telemetry. Governs what happens to a packet once a
+    # transport delivers it; the block above governs which transports are loaded at all.
+    #
+    # Every default here is the safe one. A deployment that wants less has to say so, and the
+    # combination that opens the endpoint to anonymous traffic logs a warning at boot.
+    receiver:
+      enabled: ${IOT_RECEIVER_ENABLED:true}
+      security:
+        # No credential, no packet. Turning this off is only defensible where the gateways sit on
+        # a carrier APN or private VPN AND an ip-allow-list is configured — the network then is
+        # the control. See TrustedNetworkAuthenticator.
+        require-authentication: ${RECEIVER_REQUIRE_AUTH:true}
+        # CIDRs permitted to deliver. Empty = no IP restriction, deliberately: a list that denied
+        # everything when absent would stop every gateway in the field on upgrade.
+        ip-allow-list: ${RECEIVER_IP_ALLOW_LIST:}
+        # Must exceed the longest plausible store-and-forward delay, or an NB-IoT device waking
+        # from PSM has its backlog treated as fresh when the network redelivers it.
+        replay-window: 24h
+        # Asymmetric on purpose. Devices drift backwards and buffer; they do not predict.
+        max-clock-skew-past: 7d
+        max-clock-skew-future: 5m
+        # Transports where an HMAC is mandatory. UDP belongs here on any deployment reachable from
+        # the internet — a datagram is trivially spoofable and carries no other proof of origin.
+        signature-required: ${RECEIVER_SIGNATURE_REQUIRED:}
+        # Gateway credentials, as SHA-256 hashes: the deployment holds the hash, the plaintext
+        # lives at the gateway. A leaked config file therefore hands over nothing usable.
+        #
+        # Single-gateway convenience (typical hosted deploy): set RECEIVER_GATEWAY_PRINCIPAL and
+        # RECEIVER_GATEWAY_API_KEY_SHA256. Blank hash entries are ignored by ApiKeyAuthenticator.
+        # Additional gateways can still be listed under aquagrid.iot.receiver.security.gateways in
+        # an overlay file (indexed env vars work too).
+        gateways:
+          - principal: ${RECEIVER_GATEWAY_PRINCIPAL:gateway}
+            api-key-sha256: ${RECEIVER_GATEWAY_API_KEY_SHA256:}
+            transports: []
+      limits:
+        max-packet-bytes: ${RECEIVER_MAX_PACKET_BYTES:65536}
+        # A meter reporting far above its schedule is faulty or forged; either way it should not
+        # be ingested without bound.
+        packets-per-minute-per-device: ${RECEIVER_PPM_DEVICE:120}
+        # Per source IP, and generous: one gateway legitimately fronts thousands of meters.
+        packets-per-minute-per-source: ${RECEIVER_PPM_SOURCE:30000}
+        max-metrics-per-packet: ${RECEIVER_MAX_METRICS:64}
+      retention:
+        # Asymmetric, and the asymmetry is the point: an accepted payload's information is already
+        # in the readings table, a rejected one's exists nowhere else.
+        store-accepted-payloads: false
+        store-rejected-payloads: true
+        packet-log: 90d
+        payload: 14d
+        receiver-log: 365d
+        connection-history: 90d
+        dead-letter: 30d
+        statistics: 400d
+      # Counters are buffered and flushed, not written per packet. Up to one interval is lost on
+      # an abrupt kill — acceptable for statistics; the packet log is written synchronously.
+      statistics-flush-interval: 30s
+      # What retires a half-open connection. TCP itself will hold one indefinitely.
+      session-idle-timeout: 15m
+
+logging:
+  level:
+    root: INFO
+    com.aquagrid: ${LOG_LEVEL_APP:INFO}
+    org.hibernate.SQL: WARN
+    org.springframework.security: WARN

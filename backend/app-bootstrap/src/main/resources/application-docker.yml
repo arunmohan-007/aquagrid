@@ -1,0 +1,49 @@
+# =====================================================================================
+# Docker Compose profile — a production-shaped single-node deployment.
+#
+# Everything sensitive comes from the environment. No secret appears in this file.
+# =====================================================================================
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/${POSTGRES_DB:aquagrid}
+    username: ${POSTGRES_USER:aquagrid}
+    password: ${POSTGRES_PASSWORD}
+  jpa:
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 100
+
+aquagrid:
+  web:
+    # The nginx container. Only this range may set X-Forwarded-For and be believed.
+    trusted-proxies: ${TRUSTED_PROXIES:172.16.0.0/12}
+    cors-origins: ${CORS_ORIGINS}
+
+  security:
+    jwt:
+      issuer: ${JWT_ISSUER}
+      private-key-pem: ${JWT_PRIVATE_KEY}
+      public-key-pem: ${JWT_PUBLIC_KEY}
+
+  identity:
+    app-base-url: ${APP_BASE_URL}
+    refresh-token:
+      secure: true
+      same-site: Strict
+
+  # Device ingestion: simulator off, legacy Phase-5 webhook off, receiver auth on.
+  # Gateway API-key hash comes from RECEIVER_GATEWAY_API_KEY_SHA256 (see docker-compose).
+  iot:
+    transports:
+      simulator: false
+    legacy-http-ingest:
+      enabled: false
+    receiver:
+      security:
+        require-authentication: ${RECEIVER_REQUIRE_AUTH:true}
+
+logging:
+  level:
+    com.aquagrid: INFO

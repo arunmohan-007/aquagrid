@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.4.5</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.aquagrid</groupId>
+    <artifactId>aquagrid-platform</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>AquaGrid Enterprise Water Management Platform</name>
+    <description>Microservice-ready modular monolith for smart water management</description>
+
+    <modules>
+        <module>platform-common</module>
+        <module>platform-security</module>
+        <module>module-identity</module>
+        <module>module-gis</module>
+        <module>module-iot</module>
+        <module>app-bootstrap</module>
+    </modules>
+
+    <properties>
+        <java.version>21</java.version>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Must track the spring-boot-starter-parent version declared above; the
+             annotation processor path cannot resolve it from the parent chain. -->
+        <spring-boot.version>3.4.5</spring-boot.version>
+        <!-- Ahead of the version Spring Boot 3.4.5 manages (1.20.6). That release bundles
+             docker-java 3.4.1, which cannot negotiate with Docker Engine 29's API (1.55) and
+             fails every container start with HTTP 400 on /info. -->
+        <testcontainers.version>1.21.4</testcontainers.version>
+        <mapstruct.version>1.6.3</mapstruct.version>
+        <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
+        <springdoc.version>2.7.0</springdoc.version>
+        <hibernate-spatial.version>6.6.13.Final</hibernate-spatial.version>
+        <jts.version>1.20.0</jts.version>
+
+        <!--
+            Report generation (Module 25). Both Apache-2.0, and that is the reason for these two
+            specifically rather than the more convenient alternatives: this platform ships to
+            municipalities whose procurement reviews licences, and the popular PDF table libraries
+            (iText, and the OpenPDF fork of it) are AGPL and LGPL respectively. PDFBox needs a table
+            laid out by hand where OpenPDF would not, which is a cost paid once in our code rather
+            than by every customer's legal team.
+        -->
+        <poi.version>5.3.0</poi.version>
+        <pdfbox.version>3.0.3</pdfbox.version>
+
+        <!-- Supply-chain tooling, pinned at the parent so every CI run uses the same version. -->
+        <dependency-check.version>11.1.1</dependency-check.version>
+        <cyclonedx.version>2.8.2</cyclonedx.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.aquagrid</groupId>
+                <artifactId>platform-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.aquagrid</groupId>
+                <artifactId>platform-security</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.aquagrid</groupId>
+                <artifactId>module-identity</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.aquagrid</groupId>
+                <artifactId>module-gis</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.aquagrid</groupId>
+                <artifactId>module-iot</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.mapstruct</groupId>
+                <artifactId>mapstruct</artifactId>
+                <version>${mapstruct.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.springdoc</groupId>
+                <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+                <version>${springdoc.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.hibernate.orm</groupId>
+                <artifactId>hibernate-spatial</artifactId>
+                <version>${hibernate-spatial.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.locationtech.jts</groupId>
+                <artifactId>jts-core</artifactId>
+                <version>${jts.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.poi</groupId>
+                <artifactId>poi-ooxml</artifactId>
+                <version>${poi.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.pdfbox</groupId>
+                <artifactId>pdfbox</artifactId>
+                <version>${pdfbox.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Available to every module: null-safety annotations and test harness. -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!--
+                  Supply-chain scanners. Declared in pluginManagement so they are version-pinned and
+                  available on demand, but do not run as part of every build — they are CI concerns,
+                  invoked explicitly by the workflow.
+                -->
+                <plugin>
+                    <groupId>org.owasp</groupId>
+                    <artifactId>dependency-check-maven</artifactId>
+                    <version>${dependency-check.version}</version>
+                    <configuration>
+                        <failBuildOnCVSS>7</failBuildOnCVSS>
+                        <suppressionFiles>${project.basedir}/../.github/owasp-suppressions.xml</suppressionFiles>
+                        <formats>HTML,JSON</formats>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.cyclonedx</groupId>
+                    <artifactId>cyclonedx-maven-plugin</artifactId>
+                    <version>${cyclonedx.version}</version>
+                    <configuration>
+                        <projectType>application</projectType>
+                        <schemaVersion>1.5</schemaVersion>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <parameters>true</parameters>
+                    <compilerArgs>
+                        <arg>-Xlint:all,-processing,-serial</arg>
+                    </compilerArgs>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                        <path>
+                            <groupId>org.mapstruct</groupId>
+                            <artifactId>mapstruct-processor</artifactId>
+                            <version>${mapstruct.version}</version>
+                        </path>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok-mapstruct-binding</artifactId>
+                            <version>${lombok-mapstruct-binding.version}</version>
+                        </path>
+                        <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-configuration-processor</artifactId>
+                            <version>${spring-boot.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <!--
+                Runs the *IT integration tests. Without this, Surefire's default includes
+                (*Test, *Tests, *TestCase) silently skip every *IT class and `mvn verify`
+                reports success having never started a container — a green build that proves
+                nothing. Bound here rather than in app-bootstrap so every module gets it.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

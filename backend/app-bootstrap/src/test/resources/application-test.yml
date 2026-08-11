@@ -1,0 +1,35 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    clean-disabled: false
+
+aquagrid:
+  web:
+    cors-origins:
+      - http://localhost:5173
+  crypto:
+    master-key: dGVzdC1vbmx5LWtleS1kby1ub3QtdXNlLWhlcmUhISE=
+  security:
+    jwt:
+      issuer: http://localhost
+      audience: aquagrid-api
+  identity:
+    app-base-url: http://localhost:5173
+    refresh-token:
+      secure: false
+      same-site: Lax
+    lockout:
+      max-failed-attempts: 3
+      duration: 15m
+    rate-limit:
+      login-attempts-per-ip: 100
+      login-attempts-per-identifier: 100
+    bootstrap:
+      # No bootstrap admin: each test creates the fixtures it needs.
+      password:
+
+logging:
+  level:
+    com.aquagrid: DEBUG

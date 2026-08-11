@@ -1,0 +1,90 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "AquaGrid HTTP Device Ingestion",
+    "description": "Register a LIVE device, send telemetry to the canonical receiver, and verify readings.\n\nCanonical endpoint: POST {{baseUrl}}/api/v1/receiver/http\n\nAuthentication header: X-API-Key: {{receiverApiKey}}\n(Alternatives: X-Device-Token, Authorization: Bearer …, or X-Signature + X-Nonce + X-Timestamp for HMAC.)\n\nDo not put production secrets in this collection — use Postman environment variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://localhost" },
+    { "key": "accessToken", "value": "" },
+    { "key": "receiverApiKey", "value": "" },
+    { "key": "networkAddress", "value": "356938035643809" },
+    { "key": "deviceId", "value": "" },
+    { "key": "deviceCode", "value": "METER-HTTP-001" },
+    { "key": "timestamp", "value": "2026-08-11T09:30:00Z" }
+  ],
+  "item": [
+    {
+      "name": "1. Login (operator JWT)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"identifier\": \"admin@aquagrid.local\",\n  \"password\": \"{{adminPassword}}\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "description": "Obtain a user JWT for device registration only. The meter never uses this."
+      }
+    },
+    {
+      "name": "2. Register LIVE NB-IoT device (HTTP protocol)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"deviceCode\": \"{{deviceCode}}\",\n  \"name\": \"Ward 12 HTTP meter\",\n  \"deviceType\": \"WATER_METER\",\n  \"deviceSource\": \"LIVE\",\n  \"protocol\": \"HTTP\",\n  \"communicationType\": \"NB_IOT\",\n  \"manufacturer\": \"Kamstrup\",\n  \"model\": \"flowIQ 2200\",\n  \"status\": \"ACTIVE\",\n  \"coordinates\": [76.9366, 8.5241],\n  \"communication\": {\n    \"imei\": \"{{networkAddress}}\",\n    \"operator\": \"Jio\"\n  }\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/devices",
+        "description": "Registers the meter. networkAddress is derived from communication.imei. Save the returned id into deviceId."
+      }
+    },
+    {
+      "name": "3. Send HTTP telemetry (canonical receiver)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-API-Key", "value": "{{receiverApiKey}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"imei\": \"{{networkAddress}}\",\n  \"observedAt\": \"{{timestamp}}\",\n  \"volume\": 128450.5,\n  \"flowRate\": 12.4,\n  \"battery\": 3.61,\n  \"fCnt\": 42\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/receiver/http",
+        "description": "Canonical production ingress. No user JWT. Auth is X-API-Key (gateway) or a device token/HMAC. Expect 202 with status ACCEPTED or DUPLICATE."
+      }
+    },
+    {
+      "name": "4. Verify device telemetry (operator JWT)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/v1/devices/{{deviceId}}/telemetry",
+        "description": "Confirm parsed readings for the registered device."
+      }
+    },
+    {
+      "name": "5. Legacy ingest must not be used",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"deviceEui\": \"{{networkAddress}}\",\n  \"metrics\": { \"volume\": 1.0 }\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/ingest/http",
+        "description": "Disabled by default. Expect 401 (or no mapping). Do not enable IOT_LEGACY_HTTP_INGEST_ENABLED in production."
+      }
+    }
+  ]
+}

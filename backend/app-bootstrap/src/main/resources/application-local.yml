@@ -1,0 +1,98 @@
+# =====================================================================================
+# Local development profile
+#
+# The ONLY profile in which the security relaxations below are permitted. SecurityConfig
+# and IdentityModuleConfig assert this: with any other profile active, an ephemeral JWT
+# key or a non-Secure refresh cookie causes the application to refuse to start.
+# =====================================================================================
+
+spring:
+  flyway:
+    # Out-of-order on, so a newly added migration (added after earlier ones applied) runs cleanly.
+    out-of-order: true
+  datasource:
+    # Port 5433 on host (Docker DB), mapped to 5432 inside the container.
+    # stringtype=unspecified is REQUIRED: it lets the JDBC driver pass String values to inet/citext
+    # columns without forcing a varchar bind that Postgres rejects. The token_hash columns were
+    # changed from char(64) to varchar(64) in the DB (V1003) so they validate as VARCHAR under
+    # this setting, not bpchar.
+    url: jdbc:postgresql://localhost:5433/aquagrid?stringtype=unspecified
+    username: aquagrid
+    password: aquagrid
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8088
+
+aquagrid:
+  web:
+    cors-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+
+  # Development-only key. Generate a real one with: openssl rand -base64 32
+  crypto:
+    master-key: ZGV2ZWxvcG1lbnQtb25seS1rZXktZG8tbm90LXVzZSE=
+
+  openapi:
+    expose-ui: true
+
+  security:
+    jwt:
+      issuer: http://localhost:8080
+      # No key configured: an ephemeral RSA pair is generated at startup and every session
+      # dies on restart. Acceptable here and nowhere else.
+
+  identity:
+    app-base-url: http://localhost:5173
+    refresh-token:
+      # The dev server is plain HTTP, so a Secure cookie would never be sent back.
+      secure: false
+      same-site: Lax
+    bootstrap:
+      password: ${AQUAGRID_BOOTSTRAP_ADMIN_PASSWORD:Aquagrid#Local2026}
+
+  # ---- Receiver: a gateway credential for local testing ---------------------------------------
+  # Plaintext key is `aquagrid-local-dev-key`; only its SHA-256 lives here, which is the same shape
+  # a production credential takes — the deployment holds the hash, the gateway holds the key.
+  #
+  # Local profile only, and it must stay that way: this key is in version control, so it is public.
+  # It exists so `curl -H "X-API-Key: aquagrid-local-dev-key"` can exercise the full pipeline
+  # without turning require-authentication off, which is the change that would actually be
+  # dangerous to forget about.
+  iot:
+    # ---- Fleet simulator: on by default locally ------------------------------------------------
+    # A development machine has no meters in the ground, so the platform has nothing to show and
+    # nothing to exercise without this. It stays overridable by IOT_SIMULATOR_ENABLED, and it is
+    # safe to default on *here specifically*: ProductionReadinessVerifier refuses to boot outside a
+    # development profile with it set, so this line cannot follow the build into production.
+    transports:
+      simulator: ${IOT_SIMULATOR_ENABLED:true}
+
+    receiver:
+      security:
+        gateways:
+          - principal: local-dev-gateway
+            api-key-sha256: f315d667d343b4b802fa25fe570db37cbc33dcd1a8f5ab41d0983352992f9991
+            # Unscoped so the one key works against every transport while testing. A real gateway
+            # credential names its transports.
+            transports: []
+
+    # The simulator presents that same gateway key, because that is what a network server or
+    # carrier webhook does for a fleet whose meters hold no individual credential. It is checked by
+    # the same authenticator against the same hash — so if a simulated fleet authenticates here,
+    # the physical gateway that replaces it will too, with no configuration change.
+    #
+    # A device provisioned with its own hmacKey signs its own payloads instead and never reaches
+    # this fallback. Local profile only: the plaintext key is in version control, so it is public.
+    simulator:
+      gateway-api-key: aquagrid-local-dev-key
+
+logging:
+  level:
+    com.aquagrid: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
