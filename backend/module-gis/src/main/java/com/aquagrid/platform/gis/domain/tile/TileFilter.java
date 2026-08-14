@@ -132,6 +132,17 @@ public record TileFilter(String field, StyleOperator operator, List<String> valu
                     "'" + requested + "' is not a filterable field on this layer.");
         }
 
+        /*
+         * A DATE attribute is stored as dd-MMM-yyyy text, which does not sort the way it reads —
+         * "15-Feb-2024" lexically precedes "02-Jan-2025". DATE_TIME keeps working here: it is still
+         * ISO text, and ISO text sorts the way it reads.
+         */
+        if (operator.isOrdered() && type == AttributeDataType.DATE) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED,
+                    "'" + resolved + "' is a DATE field, so '" + operator.symbol()
+                            + "' would compare it as text. Use = , != or IN for it.");
+        }
+
         List<String> values = operands(parts.length == 3 ? parts[2] : "", operator);
         return new TileFilter(resolved, operator, values, type, core);
     }

@@ -371,7 +371,7 @@ public class DataManagementController {
                 type(AttributeDataType.DECIMAL, "Decimal", "Exact decimal with configurable precision and scale. Use this for volumes, readings and money.", true, "150.75"),
                 type(AttributeDataType.DOUBLE, "Double", "Floating point. Faster, but not exact — prefer Decimal where the value is counted rather than measured.", true, "12.345678"),
                 type(AttributeDataType.BOOLEAN, "Boolean", "Yes or no. Accepts Y/N, true/false and 1/0 on import.", true, "Yes"),
-                type(AttributeDataType.DATE, "Date", "Calendar date, YYYY-MM-DD.", true, "2024-03-01"),
+                type(AttributeDataType.DATE, "Date", "Calendar date, dd-MMM-yyyy.", true, "02-Jan-2025"),
                 type(AttributeDataType.DATE_TIME, "Date Time", "Date and time of day.", true, "2024-03-01T09:30:00"),
                 type(AttributeDataType.TIME, "Time", "Time of day.", true, "09:30:00"),
                 type(AttributeDataType.UUID, "UUID", "A 128-bit identifier, for references to rows in other systems.", true, "3f2504e0-4f89-11d3-9a0c-0305e82c3301"),

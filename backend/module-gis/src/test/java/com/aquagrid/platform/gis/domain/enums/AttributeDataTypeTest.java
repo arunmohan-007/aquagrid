@@ -107,12 +107,21 @@ class AttributeDataTypeTest {
     }
 
     @ParameterizedTest
-    @DisplayName("temporal types accept ISO forms and reject the rest")
-    @ValueSource(strings = {"14/03/2026", "March 2026", "2026-13-01"})
-    void rejectsNonIsoDates(String raw) {
+    @DisplayName("date rejects anything that is not dd-MMM-yyyy, including the old ISO form")
+    @ValueSource(strings = {"14/03/2026", "March 2026", "2026-13-01", "2026-03-14", "32-Jan-2026"})
+    void rejectsNonDdMmmYyyyDates(String raw) {
         assertThatThrownBy(() -> coerce(AttributeDataType.DATE, raw))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("YYYY-MM-DD");
+                .hasMessageContaining("dd-MMM-yyyy");
+    }
+
+    @Test
+    @DisplayName("date accepts dd-MMM-yyyy and normalises the month's case")
+    void acceptsDdMmmYyyyDate() {
+        assertThat(coerce(AttributeDataType.DATE, "02-Jan-2025")).isEqualTo("02-Jan-2025");
+        // A source spreadsheet in all caps is still unambiguous, so it is normalised rather than
+        // refused for a reason no operator would guess.
+        assertThat(coerce(AttributeDataType.DATE, "02-JAN-2025")).isEqualTo("02-Jan-2025");
     }
 
     @Test
@@ -122,7 +131,6 @@ class AttributeDataTypeTest {
         // that are, in every sense that matters, correct.
         assertThat(coerce(AttributeDataType.DATE_TIME, "2026-03-14 09:30:00"))
                 .isEqualTo("2026-03-14T09:30");
-        assertThat(coerce(AttributeDataType.DATE, "2026-03-14")).isEqualTo("2026-03-14");
         assertThat(coerce(AttributeDataType.TIME, "09:30")).isEqualTo("09:30");
     }
 

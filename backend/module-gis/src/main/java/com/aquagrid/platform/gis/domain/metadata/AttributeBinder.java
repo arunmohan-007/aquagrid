@@ -6,9 +6,8 @@ import com.aquagrid.platform.gis.api.AttributeDefinition;
 import com.aquagrid.platform.gis.domain.enums.AssetStatus;
 import com.aquagrid.platform.gis.domain.enums.AssetType;
 import com.aquagrid.platform.gis.domain.enums.AssetTypeVocabulary;
+import com.aquagrid.platform.gis.domain.enums.AttributeDataType;
 import com.aquagrid.platform.gis.domain.model.Asset;
-
-import java.time.LocalDate;
 
 /**
  * Writes one source value onto an asset, according to the attribute's definition.
@@ -115,8 +114,8 @@ public final class AttributeBinder {
             case "asset_code" -> asset.setAssetCode(text);
             case "name" -> asset.setName(text);
             case "status" -> asset.setStatus(parseStatus(text));
-            case "install_date" -> asset.setInstallDate(LocalDate.parse(text));
-            case "decommission_date" -> asset.setDecommissionDate(LocalDate.parse(text));
+            case "install_date" -> asset.setInstallDate(AttributeDataType.parseStoredDate(text));
+            case "decommission_date" -> asset.setDecommissionDate(AttributeDataType.parseStoredDate(text));
             case "asset_type" -> AssetTypeVocabulary.resolve(text).ifPresentOrElse(
                     asset::setAssetType,
                     () -> asset.getAttributes().put("asset_type", text));

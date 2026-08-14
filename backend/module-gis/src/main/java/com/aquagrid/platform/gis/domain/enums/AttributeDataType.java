@@ -8,7 +8,10 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
+import java.util.Locale;
 
 /**
  * The vocabulary of types an attribute can declare, and the only place a text value from an
@@ -53,6 +56,31 @@ public enum AttributeDataType {
      * the geometry column rather than pretending a layer has none.
      */
     GEOMETRY;
+
+    /**
+     * The one format a {@code DATE} attribute is ever written or read in, across import, export,
+     * the Data Management form and every asset form the catalogue drives — {@code 02-Jan-2025}.
+     *
+     * <p>Case-insensitive on parse so "02-JAN-2025" from an all-caps source spreadsheet is not
+     * rejected for a reason no operator would guess, while every stored and displayed value comes
+     * back out through the same formatter and is therefore always title case.
+     */
+    public static final DateTimeFormatter DATE_FORMAT = new DateTimeFormatterBuilder()
+            .parseCaseInsensitive()
+            .appendPattern("dd-MMM-yyyy")
+            .toFormatter(Locale.ENGLISH);
+
+    /**
+     * Parses a value already coerced by {@link #DATE}'s {@link #coerce}.
+     *
+     * <p>Used where a {@code DATE} attribute is routed onto a native {@code LocalDate} column
+     * (see {@code AttributeBinder}) rather than into the JSONB bag — the value has already passed
+     * {@link #coerce} by that point, so failure here would mean the two disagree about the format,
+     * not that the source data is bad.
+     */
+    public static LocalDate parseStoredDate(String text) {
+        return LocalDate.parse(text, DATE_FORMAT);
+    }
 
     /** True when {@code maxLength} is meaningful for this type. */
     public boolean usesLength() {
@@ -113,9 +141,9 @@ public enum AttributeDataType {
             case BOOLEAN -> parseBoolean(value, label);
             case DATE -> {
                 try {
-                    yield LocalDate.parse(value).toString();
+                    yield LocalDate.parse(value, DATE_FORMAT).format(DATE_FORMAT);
                 } catch (DateTimeParseException e) {
-                    throw reject(label, value, "is not a date in YYYY-MM-DD form");
+                    throw reject(label, value, "is not a date in dd-MMM-yyyy form (for example 02-Jan-2025)");
                 }
             }
             case DATE_TIME -> {

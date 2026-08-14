@@ -307,8 +307,9 @@ function RuleCard({
   const field = fields.find((f) => f.fieldName === rule.fieldName);
   const operators = (vocabulary?.operators ?? []).filter((op) => {
     // A magnitude comparison on a text field compares strings — '9' sorts after '10' — so those
-    // operators are withheld rather than offered and then refused on save.
-    if (op.ordered && field && !field.numeric && !field.dataType.startsWith('DATE')) return false;
+    // operators are withheld rather than offered and then refused on save. DATE_TIME is still ISO
+    // text and sorts correctly; DATE is dd-MMM-yyyy text and does not.
+    if (op.ordered && field && !field.numeric && field.dataType !== 'DATE_TIME') return false;
     // Categorical styles compose into a MapLibre `match`, which compares for equality and nothing
     // else. Offering anything more here would silently degrade the style to the general form.
     if (styleType === 'CATEGORICAL' && !['EQ', 'IN'].includes(op.value)) return false;

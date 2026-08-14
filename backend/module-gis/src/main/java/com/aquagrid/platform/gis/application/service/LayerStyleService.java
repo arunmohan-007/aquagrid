@@ -533,7 +533,6 @@ public class LayerStyleService {
     private static void validateOperands(AttributeDefinition field, StyleOperator operator,
                                          StyleCommands.Rule rule) {
         if (operator.isOrdered() && !field.dataType().isNumeric()
-                && field.dataType() != AttributeDataType.DATE
                 && field.dataType() != AttributeDataType.DATE_TIME) {
             throw new BusinessException(ErrorCode.VALIDATION_FAILED,
                     "'" + field.displayName() + "' is a " + field.dataType() + " field, so '"
