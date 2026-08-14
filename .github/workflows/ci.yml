@@ -25,6 +25,8 @@ concurrency:
 permissions:
   contents: read
   security-events: write   # required for Trivy/SARIF upload to GitHub Security
+  actions: read            # upload-sarif reads its own workflow run for context; without this
+                            # it fails with "Resource not accessible by integration"
 
 jobs:
   # ---- Backend: build + test -----------------------------------------------------------
