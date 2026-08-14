@@ -1,0 +1,17 @@
+# =====================================================================================
+# AquaGrid — production overlay
+#
+# Applied on top of docker-compose.yml on the EC2 host:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile web up -d
+#
+# docker-compose.yml's `api` service still carries a `build:` block — that stays true for
+# anyone building from source on their own machine. This file adds `image:`, which is what
+# `docker compose pull` resolves and what `up -d` (run without `--build`) starts, so the
+# server runs the exact artifact CI built, scanned and pushed, never a local rebuild.
+# =====================================================================================
+
+services:
+  api:
+    image: ${ECR_REGISTRY:?ECR_REGISTRY must be set}/${ECR_REPOSITORY:?ECR_REPOSITORY must be set}:${IMAGE_TAG:-latest}
+    pull_policy: always
