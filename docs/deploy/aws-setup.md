@@ -124,7 +124,8 @@ profile with:
   on the box can authenticate and pull.
 
 The instance also needs the AWS CLI installed (`docker login` in the rollout script shells
-out to `aws ecr get-login-password`) and this repo checked out at `/opt/aquagrid` with
+out to `aws ecr get-login-password`) and this repo checked out at `/home/ubuntu/aquagrid`
+(the path `deploy.yml`'s SSM step `cd`s into — update both if you relocate it) with
 `deploy/docker-compose.yml`, `deploy/docker-compose.prod.yml` and a populated `.env`
 (`POSTGRES_PASSWORD`, `AQUAGRID_MASTER_KEY`, `JWT_*`, etc. — see
 [docker-compose.yml](../../deploy/docker-compose.yml)) already in place. The rollout

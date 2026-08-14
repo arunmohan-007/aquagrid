@@ -31,7 +31,10 @@ jobs:
   backend:
     name: Backend (build, test, scan)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 25 was sized for compile+test+scan together, but the OWASP step alone can run long on a
+    # cold NVD cache (see its own timeout below) — this budget has to cover that plus everything
+    # after it (Trivy, SBOM, uploads), or a slow scan silently kills steps that already passed.
+    timeout-minutes: 40
     env:
       # Testcontainers needs the Docker socket; the hosted runner provides it.
       TESTCONTAINERS_RYUK_DISABLED: 'false'
@@ -78,10 +81,30 @@ jobs:
           docker build -t aquagrid/api:ci -f backend/app-bootstrap/Dockerfile backend
 
       # ---- Supply-chain evidence -------------------------------------------------------
+      # The local NVD mirror dependency-check downloads before it can scan anything. Cached and
+      # keyed by week: a warm cache turns the update into a small incremental delta instead of a
+      # ~377k-record cold pull, which is what took the unauthenticated (no NVD_API_KEY) job past
+      # its old 25-minute budget on the very first run and killed every step after it — Trivy,
+      # SBOM, the lot — none of which had actually failed.
+      - name: Week number for the cache key
+        id: dc-week
+        run: echo "week=$(date +%Y-W%U)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache OWASP dependency-check data
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: owasp-dc-data-${{ steps.dc-week.outputs.week }}
+          restore-keys: owasp-dc-data-
+
       # OWASP dependency-check: CVE scan of the Maven dependency tree. Fails on high/critical
       # findings. The NVD API key raises the rate limit; without it the scan still runs but slower.
+      # Its own timeout is well inside the job's, so a slow NVD update can never eat the budget
+      # Trivy/SBOM/uploads need — continue-on-error was already meant to make this non-blocking;
+      # this is what makes that true even when the step runs out of its own clock.
       - name: Dependency vulnerability scan
         working-directory: backend
+        timeout-minutes: 15
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: mvn -B -ntp -DskipTests org.owasp:dependency-check-maven:check
