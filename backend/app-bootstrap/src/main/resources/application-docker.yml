@@ -6,7 +6,7 @@
 
 spring:
   datasource:
-    url: jdbc:postgresql://postgres:5432/${POSTGRES_DB:aquagrid}
+    url: jdbc:postgresql://postgres:5432/${POSTGRES_DB:aquagrid}?stringtype=unspecified
     username: ${POSTGRES_USER:aquagrid}
     password: ${POSTGRES_PASSWORD}
   jpa:

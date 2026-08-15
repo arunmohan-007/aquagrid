@@ -27,7 +27,7 @@
         <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
             <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
                 <layout class="ch.qos.logback.classic.PatternLayout">
-                    <pattern>{"timestamp":"%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,UTC}","level":"%level","app":"${appName}","logger":"%logger{40}","thread":"%thread","traceId":"%X{traceId:-}","userId":"%X{userId:-}","orgId":"%X{orgId:-}","message":"%replace(%msg){'"','\\"'}"%n</pattern>
+                    <pattern>{"timestamp":"%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,UTC}","level":"%level","app":"${appName}","logger":"%logger{40}","thread":"%thread","traceId":"%X{traceId:-}","userId":"%X{userId:-}","orgId":"%X{orgId:-}","message":"%replace(%msg){'"','\\"'}"}%n</pattern>
                 </layout>
             </encoder>
         </appender>
