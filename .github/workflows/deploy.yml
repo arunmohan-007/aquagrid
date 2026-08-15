@@ -93,6 +93,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "AquaGrid deploy ${IMAGE_TAG:0:7}" \
             --parameters "{\"commands\":[
+              \"#!/bin/bash\",
               \"set -euo pipefail\",
               \"aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}\",
               \"cd /home/ubuntu/aquagrid/deploy\",
