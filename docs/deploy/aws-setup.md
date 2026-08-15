@@ -35,7 +35,27 @@ aws iam create-open-id-connect-provider \
 ## 3. IAM role GitHub Actions assumes
 
 Trust policy — scoped to this repo, and to `main` specifically, so a workflow run on a
-fork or a feature branch cannot assume it:
+fork or a feature branch cannot assume it.
+
+**The `sub` claim is not just `repo:OWNER/REPO:...`.** GitHub appends the org's and
+repo's immutable numeric IDs — `repo:OWNER@ORG_ID/REPO@REPO_ID:...` — as an anti-hijack
+measure against repo renames and transfers. A trust policy written against the plain
+`OWNER/REPO` form (the form GitHub's own OIDC docs lead with) will reject every run with
+`Not authorized to perform sts:AssumeRoleWithWebIdentity` and no further detail. Find the
+real values once, from a workflow that has `permissions: id-token: write`:
+
+```bash
+RESPONSE=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+echo "$RESPONSE" | jq -r '.value' | cut -d. -f2 | tr '_-' '/+' | \
+  python3 -c "import sys,base64,json; p=sys.stdin.read(); print(json.loads(base64.b64decode(p+'='*(-len(p)%4))))" \
+  | jq '.sub'
+```
+
+For this repo that's `arunmohan-007@298143198` and `aquagrid@1330807990`. The job also
+runs under `environment: production` in `deploy.yml`, which changes the claim's suffix
+from `:ref:refs/heads/main` to `:environment:production` — the trust policy has to allow
+both forms, one for jobs without an environment gate and one for jobs with it:
 
 ```json
 {
@@ -45,8 +65,13 @@ fork or a feature branch cannot assume it:
     "Principal": { "Federated": "arn:aws:iam::<ACCOUNT_ID>:oidc-provider/token.actions.githubusercontent.com" },
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
-      "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-      "StringLike": { "token.actions.githubusercontent.com:sub": "repo:arunmohan-007/aquagrid:ref:refs/heads/main" }
+      "StringEquals": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": [
+          "repo:arunmohan-007@298143198/aquagrid@1330807990:ref:refs/heads/main",
+          "repo:arunmohan-007@298143198/aquagrid@1330807990:environment:production"
+        ]
+      }
     }
   }]
 }
