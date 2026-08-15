@@ -58,6 +58,23 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
+      # Temporary — prints what the OIDC token actually claims (sub/aud/ref/environment),
+      # not the raw token. Two failed AssumeRoleWithWebIdentity attempts with a trust
+      # policy that should match means the claim is not what's expected; read it instead
+      # of guessing a third time. Remove once the mismatch is found.
+      - name: Debug OIDC token claims
+        run: |
+          RESPONSE=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com")
+          TOKEN=$(echo "$RESPONSE" | jq -r '.value')
+          PAYLOAD=$(echo "$TOKEN" | cut -d. -f2)
+          MOD=$(( ${#PAYLOAD} % 4 ))
+          if [ "$MOD" -ne 0 ]; then
+            PAD=$(( 4 - MOD ))
+            PAYLOAD="${PAYLOAD}$(printf '=%.0s' $(seq 1 $PAD))"
+          fi
+          echo "$PAYLOAD" | tr '_-' '/+' | base64 -d 2>/dev/null | jq '{sub, aud, iss, repository, ref, environment, job_workflow_ref, event_name}'
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
