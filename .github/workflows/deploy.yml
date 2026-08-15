@@ -100,7 +100,7 @@ jobs:
               \"export ECR_REGISTRY=${REGISTRY} ECR_REPOSITORY=${ECR_REPOSITORY} IMAGE_TAG=${IMAGE_TAG}\",
               \"docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile web pull api\",
               \"docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile web up -d api\",
-              \"for i in $(seq 1 18); do curl -fsS http://localhost:8080/actuator/health/readiness && exit 0; sleep 5; done; echo Health check never succeeded; exit 1\"
+              \"for i in {1..18}; do curl -fsS http://localhost:8080/actuator/health/readiness && exit 0; sleep 5; done; echo Health check never succeeded; exit 1\"
             ]}" \
             --query "Command.CommandId" --output text)
 
