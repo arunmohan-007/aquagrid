@@ -127,6 +127,9 @@ jobs:
 
       - name: Upload Trivy results to Security tab
         if: always()
+        continue-on-error: true   # Populating the Security tab needs GitHub Advanced
+          # Security enabled on the repo; a scan that already ran and already printed its
+          # findings in the step above should not be what blocks a release candidate.
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
