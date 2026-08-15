@@ -54,6 +54,11 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      # Production already has Flyway history entries numbered ahead of some migrations added
+      # later in development (the IoT module's V140x range predates V1335 in application order
+      # but not in version number) -- out-of-order lets a migration land in that gap instead of
+      # failing validation on every startup.
+      SPRING_FLYWAY_OUT_OF_ORDER: "true"
       POSTGRES_DB: ${POSTGRES_DB:-aquagrid}
       POSTGRES_USER: ${POSTGRES_USER:-aquagrid}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
@@ -86,6 +91,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    volumes:
+      - attachments-data:/app/data/attachments
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/readiness"]
       interval: 30s
@@ -102,6 +109,7 @@ services:
     depends_on: [api]
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/proxy_common.conf:/etc/nginx/conf.d/proxy_common.conf:ro
       - ./nginx/certs:/etc/nginx/certs:ro
       - spa-dist:/usr/share/nginx/html:ro
     ports:
@@ -154,6 +162,7 @@ services:
 
 volumes:
   postgres-data:
+  attachments-data:
   geoserver-data:
   mosquitto-data:
   spa-dist:
