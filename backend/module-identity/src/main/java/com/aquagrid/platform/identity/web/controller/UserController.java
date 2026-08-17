@@ -93,8 +93,8 @@ public class UserController {
     @PreAuthorize("hasAuthority('" + Permissions.USER_CREATE + "')")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Create a user",
-            description = "The created account has no usable password until an administrator sets one "
-                    + "or issues an invitation. Prefer invitations — they avoid transmitting a password.")
+            description = "The created account is active immediately with the default password '123456'. "
+                    + "The user must change it at first sign-in.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "User created"),
             @ApiResponse(responseCode = "409", description = "Username or email already in use")})

@@ -72,6 +72,9 @@ public class UserManagementService {
     private final Clock clock;
     private final CacheManager cacheManager;
 
+    /** Issued to every admin-created account; {@code mustChangePassword} forces a change before use. */
+    private static final String DEFAULT_PASSWORD = "123456";
+
     // --- Listing & lookup -----------------------------------------------------------------------
 
     @Transactional(readOnly = true)
@@ -105,13 +108,13 @@ public class UserManagementService {
         user.setFullName(command.fullName());
         user.setJobTitle(command.jobTitle());
         user.setPhone(command.phone());
-        // A user created by an admin cannot sign in until a password is set. We store a hash of a
-        // random value that can never validate, so the account exists but is inert until the admin
-        // sets a password or issues an invitation. This avoids shipping a default password.
-        user.setPasswordHash(passwordEncoder.encode(TokenGenerator.opaqueToken()));
+        // The account ships with a known default password. mustChangePassword forces the user to
+        // replace it at first sign-in, so the window in which the default is valid is exactly one
+        // login.
+        user.setPasswordHash(passwordEncoder.encode(DEFAULT_PASSWORD));
         user.setPasswordUpdatedAt(clock.instant());
         user.setMustChangePassword(true);
-        user.setStatus(UserStatus.PENDING);
+        user.setStatus(UserStatus.ACTIVE);
 
         if (command.roleCodes() != null && !command.roleCodes().isEmpty()) {
             user.setRoles(resolveRoles(organizationId, command.roleCodes()));

@@ -49,6 +49,8 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "Trivandrum#Water47";
     private static final String EMAIL = "j.mathew@kwa.test";
+    private static final String USERNAME = "j.mathew";
+    private static final String ORG_CODE = "SYSTEM";
 
     @Autowired
     private MockMvc mockMvc;
@@ -94,7 +96,7 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("signs in, returns an access token, and sets an HttpOnly refresh cookie")
     void signsInSuccessfully() throws Exception {
-        MvcResult result = login(EMAIL, PASSWORD)
+        MvcResult result = login(USERNAME, PASSWORD)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
@@ -115,12 +117,12 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("an unknown account and a wrong password are indistinguishable")
     void doesNotLeakAccountExistence() throws Exception {
-        String unknownAccount = login("nobody@kwa.test", PASSWORD)
+        String unknownAccount = login("nobody", PASSWORD)
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_INVALID_CREDENTIALS"))
                 .andReturn().getResponse().getContentAsString();
 
-        String wrongPassword = login(EMAIL, "Completely#Wrong99")
+        String wrongPassword = login(USERNAME, "Completely#Wrong99")
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_INVALID_CREDENTIALS"))
                 .andReturn().getResponse().getContentAsString();
@@ -132,7 +134,7 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
     @Test
     @DisplayName("rotates the refresh token and revokes the whole family when one is reused")
     void detectsRefreshTokenReuse() throws Exception {
-        String originalCookie = login(EMAIL, PASSWORD)
+        String originalCookie = login(USERNAME, PASSWORD)
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getCookie("ag_rt").getValue();
 
@@ -161,14 +163,15 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
     @DisplayName("locks the account after the configured number of failures")
     void locksAccountAfterRepeatedFailures() throws Exception {
         String email = "lockout.target@kwa.test";
+        String username = "lockout.target";
         createSecondaryUser(email);
 
         for (int attempt = 0; attempt < 3; attempt++) {
-            login(email, "Completely#Wrong99").andExpect(status().isUnauthorized());
+            login(username, "Completely#Wrong99").andExpect(status().isUnauthorized());
         }
 
         // Even the correct password is now refused, and the response says for how long.
-        login(email, PASSWORD)
+        login(username, PASSWORD)
                 .andExpect(status().isLocked())
                 .andExpect(jsonPath("$.code").value("AUTH_ACCOUNT_LOCKED"))
                 .andExpect(jsonPath("$.retryAfterSeconds").isNumber());
@@ -187,9 +190,10 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
     @DisplayName("a refused sign-in still persists the counter and the forensic record")
     void failedLoginCommitsItsEvidence() throws Exception {
         String email = "evidence.target@kwa.test";
-        createSecondaryUser(email, "evidence.target");
+        String username = "evidence.target";
+        createSecondaryUser(email, username);
 
-        login(email, "Completely#Wrong99").andExpect(status().isUnauthorized());
+        login(username, "Completely#Wrong99").andExpect(status().isUnauthorized());
 
         UUID userId = userRepository.findByEmailIgnoreCase(email).orElseThrow().getId();
 
@@ -216,9 +220,10 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
     @DisplayName("repeated wrong verification codes lock the account")
     void locksAccountAfterRepeatedMfaFailures() throws Exception {
         String email = "mfa.target@kwa.test";
+        String username = "mfa.target";
         String secret = createMfaUser(email);
 
-        String mfaToken = field(login(email, PASSWORD)
+        String mfaToken = field(login(username, PASSWORD)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mfaRequired").value(true))
                 .andReturn().getResponse().getContentAsString(), "mfaToken");
@@ -250,7 +255,7 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("AUTH_REQUIRED"));
 
-        String accessToken = field(login(EMAIL, PASSWORD).andReturn().getResponse()
+        String accessToken = field(login(USERNAME, PASSWORD).andReturn().getResponse()
                 .getContentAsString(), "accessToken");
 
         mockMvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + accessToken))
@@ -297,7 +302,8 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
         return mockMvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"identifier":"%s","password":"%s"}""".formatted(identifier, password)));
+                        {"identifier":"%s","password":"%s","organizationCode":"%s"}"""
+                        .formatted(identifier, password, ORG_CODE)));
     }
 
     private org.springframework.test.web.servlet.ResultActions challenge(String mfaToken,

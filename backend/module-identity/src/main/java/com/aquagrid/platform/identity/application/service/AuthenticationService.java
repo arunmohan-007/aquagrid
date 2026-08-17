@@ -337,17 +337,14 @@ public class AuthenticationService {
     }
 
     private Optional<User> resolveUser(String identifier, String organizationCode) {
-        if (StringUtils.hasText(organizationCode)) {
-            // Username is unique only within a tenant, so it requires the tenant code. Email is
-            // accepted here too, so a user who types their email plus their organisation still
-            // signs in rather than being told, unhelpfully, that their credentials are wrong.
-            return userRepository
-                    .findByUsernameAndOrganizationCode(identifier, organizationCode.trim())
-                    .or(() -> userRepository.findByEmailIgnoreCase(identifier)
-                            .filter(user -> user.getOrganization().getCode()
-                                    .equalsIgnoreCase(organizationCode.trim())));
+        // Login is by username, and username is unique only within a tenant, so the organisation
+        // code is mandatory. Without it there is nothing to disambiguate the identifier against, so
+        // no account is resolved and the caller falls onto the same constant-work "unknown account"
+        // path as a wrong username.
+        if (!StringUtils.hasText(organizationCode)) {
+            return Optional.empty();
         }
-        return userRepository.findByEmailIgnoreCase(identifier);
+        return userRepository.findByUsernameAndOrganizationCode(identifier, organizationCode.trim());
     }
 
     private void enforceLoginRateLimits(String identifier, AuthCommands.Login command) {
@@ -485,7 +482,7 @@ public class AuthenticationService {
     private BusinessException invalidCredentials() {
         // One message for every credential failure mode. The specific reason is in login_attempts.
         return new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS,
-                "The email, username or password you entered is not correct.");
+                "The username, organisation code or password you entered is not correct.");
     }
 
     private BusinessException rateLimited(RateLimitDecision decision) {

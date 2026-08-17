@@ -55,7 +55,7 @@ export interface AuthenticationResponse {
 export interface LoginPayload {
   identifier: string;
   password: string;
-  organizationCode?: string;
+  organizationCode: string;
   deviceLabel?: string;
 }
 

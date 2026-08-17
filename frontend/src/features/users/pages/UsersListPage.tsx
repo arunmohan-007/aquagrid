@@ -21,12 +21,14 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/SearchOutlined';
 import AddIcon from '@mui/icons-material/PersonAddOutlined';
+import PersonAddAlt1Icon from '@mui/icons-material/PersonAddAlt1Outlined';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeftOutlined';
 import ChevronRightIcon from '@mui/icons-material/ChevronRightOutlined';
 import { useUserList } from '../hooks/useUsers';
 import { UserStatusChip } from '../components/UserStatusChip';
 import type { UserStatus } from '../types';
 import { InviteUserDialog } from '../components/InviteUserDialog';
+import { CreateUserDialog } from '../components/CreateUserDialog';
 
 const STATUS_FILTERS: Array<{ value: '' | UserStatus; label: string }> = [
   { value: '', label: 'All statuses' },
@@ -50,6 +52,7 @@ export default function UsersListPage() {
   const [status, setStatus] = useState<'' | UserStatus>('');
   const [page, setPage] = useState(0);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const { data, isLoading, error, isFetching } = useUserList({
     search: search.trim() || undefined,
@@ -70,9 +73,14 @@ export default function UsersListPage() {
             Manage accounts, roles and invitations in your organisation.
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setInviteOpen(true)}>
-          Invite user
-        </Button>
+        <Stack direction="row" spacing={1.5}>
+          <Button variant="outlined" startIcon={<PersonAddAlt1Icon />} onClick={() => setCreateOpen(true)}>
+            Create user
+          </Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setInviteOpen(true)}>
+            Invite user
+          </Button>
+        </Stack>
       </Stack>
 
       {error ? (
@@ -209,6 +217,7 @@ export default function UsersListPage() {
       </Card>
 
       <InviteUserDialog open={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <CreateUserDialog open={createOpen} onClose={() => setCreateOpen(false)} />
     </Stack>
   );
 }
