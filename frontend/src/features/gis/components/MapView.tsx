@@ -259,6 +259,9 @@ export const MapView = forwardRef<MapHandle, {
        */
       let tileAttempts = 0;
       let tileOk = 0;
+      // Set only when the watchdog below has actually shown its banner, so a tile that finally
+      // lands afterwards can take it back down again.
+      let watchdogFired = false;
 
       let map: MlMap;
       try {
@@ -317,16 +320,36 @@ export const MapView = forwardRef<MapHandle, {
        * existed to measure, and doubling tile traffic to say so.
        */
       map.on('data', (event) => {
-        if ((event as { tile?: unknown }).tile) tileOk++;
+        if (!(event as { tile?: unknown }).tile) return;
+        tileOk++;
+        // The watchdog fired before this tile landed, on the strength of `map.loaded()` — which
+        // demands every tile MapLibre has ever requested resolve, including ones long since panned
+        // away from and never explicitly failed or cancelled. A tile actually completing is proof
+        // the map works regardless of what that internal bookkeeping says, so the false alarm comes
+        // back down the moment reality contradicts it.
+        if (watchdogFired) {
+          watchdogFired = false;
+          onDiagnosticRef.current(null);
+        }
       });
 
       /*
        * If the map has not finished loading in a few seconds, report the internal state rather
        * than a generic message. Which of these flags is false localises the fault immediately:
        * a style that never loaded is a different bug from a loaded style that never painted.
+       *
+       * Gated on `tileOk === 0` rather than `map.loaded()` alone: `loaded()` requires every tile
+       * ever requested — including ones a since-applied camera move or fitBounds already panned
+       * away from — to individually resolve, and MapLibre does not always clean up a tile that
+       * fell out of view before it settled. That leaves `loaded()` stuck false indefinitely on a
+       * map that has already painted real tiles and is working exactly as it should; alarming the
+       * operator over MapLibre's internal bookkeeping when their own eyes show a working map is
+       * worse than not alarming them at all. `tileOk === 0` is what actually distinguishes that
+       * from a genuine failure — nothing has rendered, and something is really wrong.
        */
       const watchdog = window.setTimeout(() => {
-        if (map.loaded()) return;
+        if (map.loaded() || tileOk > 0) return;
+        watchdogFired = true;
         let sources = 0;
         try {
           sources = Object.keys(map.getStyle()?.sources ?? {}).length;
