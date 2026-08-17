@@ -38,6 +38,14 @@ import java.time.Duration;
  *               distinction — a boundary set or an imported reference layer is marked not editable
  *               precisely because it does not change — so the cache reads that rather than
  *               introducing a second flag saying the same thing in different words.
+ * @param queryTimeout how long a single tile query may run before Postgres cancels it. Import puts
+ *               no ceiling on a feature's vertex count or validity — a self-intersecting ring or a
+ *               shapefile-conversion artefact with tens of thousands of points reaches {@code
+ *               ST_AsMVTGeom} exactly like any other geometry. Without this, one such feature does
+ *               not error: it runs, ties up a database connection indefinitely, and every other tile
+ *               request — for this tenant and any other sharing the pool — queues behind it. A
+ *               bounded failure the operator can report is the difference between that and a map
+ *               that silently never finishes loading for everyone.
  */
 @Validated
 @ConfigurationProperties(prefix = "aquagrid.gis.tile")
@@ -45,7 +53,8 @@ public record GisTileProperties(
         Integer extent,
         Integer buffer,
         Duration dynamicCacheMaxAge,
-        Duration staticCacheMaxAge
+        Duration staticCacheMaxAge,
+        Duration queryTimeout
 ) {
 
     /**
@@ -61,6 +70,7 @@ public record GisTileProperties(
         buffer = buffer == null ? 8 : buffer;
         dynamicCacheMaxAge = dynamicCacheMaxAge == null ? Duration.ofMinutes(5) : dynamicCacheMaxAge;
         staticCacheMaxAge = staticCacheMaxAge == null ? Duration.ofHours(6) : staticCacheMaxAge;
+        queryTimeout = queryTimeout == null ? Duration.ofSeconds(8) : queryTimeout;
 
         /*
          * Refused at boot rather than clamped. A buffer wider than the tile itself, or a
@@ -76,6 +86,10 @@ public record GisTileProperties(
             throw new IllegalArgumentException(
                     "aquagrid.gis.tile.buffer must be between 0 and " + (extent / 4)
                             + " at extent " + extent + ", was " + buffer);
+        }
+        if (queryTimeout.isNegative() || queryTimeout.isZero()) {
+            throw new IllegalArgumentException(
+                    "aquagrid.gis.tile.queryTimeout must be positive, was " + queryTimeout);
         }
     }
 

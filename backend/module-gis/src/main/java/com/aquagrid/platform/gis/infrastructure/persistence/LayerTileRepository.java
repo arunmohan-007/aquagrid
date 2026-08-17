@@ -7,8 +7,11 @@ import com.aquagrid.platform.gis.domain.tile.TileFilter;
 import com.aquagrid.platform.gis.infrastructure.config.GisTileProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.PreparedStatementCreator;
 import org.springframework.stereotype.Repository;
 
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -136,8 +139,28 @@ public class LayerTileRepository {
         args.add(tile.z()); args.add(tile.x()); args.add(tile.y());
         args.addAll(filterBindings);
 
-        byte[] bytes = jdbc.queryForObject(sql, byte[].class, args.toArray());
+        /*
+         * A hand-built PreparedStatementCreator rather than `jdbc.queryForObject(sql, Class,
+         * args)`: the timeout has to land on this one statement. `JdbcTemplate.setQueryTimeout` sets
+         * it on the shared template instance instead — this bean is injected across the module, so
+         * that would apply the tile deadline to every other query running through it, or race
+         * concurrent tile requests mutating the same field against each other.
+         */
+        int timeoutSeconds = (int) properties.queryTimeout().toSeconds();
+        PreparedStatementCreator creator = con -> {
+            PreparedStatement ps = con.prepareStatement(sql);
+            ps.setQueryTimeout(timeoutSeconds);
+            bind(ps, args);
+            return ps;
+        };
+        byte[] bytes = jdbc.query(creator, rs -> rs.next() ? rs.getBytes(1) : null);
         return bytes == null ? new byte[0] : bytes;
+    }
+
+    private static void bind(PreparedStatement ps, List<Object> args) throws SQLException {
+        for (int i = 0; i < args.size(); i++) {
+            ps.setObject(i + 1, args.get(i));
+        }
     }
 
     /**

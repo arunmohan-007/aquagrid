@@ -565,15 +565,19 @@ class VectorTileIT extends AbstractIntegrationTest {
     void tileGeometryParametersAreConfigurable() {
         assertThat(tileProperties.extent()).isEqualTo(4096);
         assertThat(tileProperties.buffer()).isPositive();
+        assertThat(tileProperties.queryTimeout()).isPositive();
 
         // A buffer wider than a quarter of the grid, or a nonsensical extent, is refused at boot
         // rather than clamped: a map that draws subtly wrong is harder to diagnose than one that
         // will not start.
-        assertThatThrownBy(() -> new GisTileProperties(4096, 4096, null, null))
+        assertThatThrownBy(() -> new GisTileProperties(4096, 4096, null, null, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> new GisTileProperties(0, 8, null, null))
+        assertThatThrownBy(() -> new GisTileProperties(0, 8, null, null, null))
                 .isInstanceOf(IllegalArgumentException.class);
-        assertThatCode(() -> new GisTileProperties(4096, 64, Duration.ofMinutes(1), Duration.ofDays(1)))
+        assertThatThrownBy(() -> new GisTileProperties(4096, 64, null, null, Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatCode(() -> new GisTileProperties(
+                        4096, 64, Duration.ofMinutes(1), Duration.ofDays(1), Duration.ofSeconds(8)))
                 .doesNotThrowAnyException();
     }
 
