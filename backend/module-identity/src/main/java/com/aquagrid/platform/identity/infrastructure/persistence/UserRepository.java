@@ -62,21 +62,30 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /**
      * Tenant-scrolled user list. The {@code organization_id} predicate is the first join key because
      * tenancy is enforced in depth here (Hibernate filter + this predicate + the JWT claim).
+     *
+     * <p>No {@code roles} fetch join here deliberately: Hibernate refuses to paginate a collection
+     * fetch join ({@code fail_on_pagination_over_collection_fetch} in application.yml), since doing
+     * so would silently paginate in memory over the joined rows. Callers that need roles load them
+     * for the returned page via {@link #findAllWithRolesByIdIn}.
      */
-    @EntityGraph(attributePaths = {"roles"})
     @Query("""
             SELECT u FROM User u
             WHERE u.organization.id = :organizationId
-              AND (:status IS NULL OR u.status = :status)
-              AND (:search IS NULL
-                   OR lower(u.fullName) LIKE lower(concat('%', :search, '%'))
-                   OR lower(u.email) LIKE lower(concat('%', :search, '%'))
-                   OR lower(u.username) LIKE lower(concat('%', :search, '%')))
+              AND (cast(:status as string) IS NULL OR cast(u.status as string) = cast(:status as string))
+              AND (cast(:search as string) IS NULL
+                   OR lower(u.fullName) LIKE lower(concat('%', cast(:search as string), '%'))
+                   OR lower(u.email) LIKE lower(concat('%', cast(:search as string), '%'))
+                   OR lower(u.username) LIKE lower(concat('%', cast(:search as string), '%')))
             """)
     Page<User> findForTenant(@Param("organizationId") UUID organizationId,
                              @Param("status") UserStatus status,
                              @Param("search") String search,
                              Pageable pageable);
+
+    /** Batch-loads roles for a known set of users (e.g. one page) without pagination. */
+    @EntityGraph(attributePaths = {"roles"})
+    @Query("SELECT u FROM User u WHERE u.id IN :ids")
+    java.util.List<User> findAllWithRolesByIdIn(@Param("ids") java.util.Collection<UUID> ids);
 
     @Query("SELECT COUNT(u) FROM User u")
     long countAllUsers();
