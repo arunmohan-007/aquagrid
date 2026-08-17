@@ -87,6 +87,15 @@ public class LayerAttribute extends TenantAwareEntity {
     @Column(name = "is_unique", nullable = false)
     private boolean uniqueValue;
 
+    /**
+     * Use this field (alongside {@code asset_code}) to recognise a row a bulk import has already
+     * seen. Deliberately separate from {@link #uniqueValue}: whether a value must never repeat and
+     * whether it is the field an operator wants re-imports matched on are different questions that
+     * often agree but need not — see {@code BulkImportService}.
+     */
+    @Column(name = "duplicate_check", nullable = false)
+    private boolean duplicateCheck;
+
     @Column(name = "is_editable", nullable = false)
     private boolean editable = true;
 

@@ -4,18 +4,32 @@ import {
   Alert,
   Box,
   Button,
+  Card,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
   InputBase,
   LinearProgress,
   MenuItem,
   Select,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Toolbar,
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import SearchIcon from '@mui/icons-material/SearchOutlined';
 import ChevronIcon from '@mui/icons-material/ChevronRightOutlined';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeftOutlined';
+import CloseIcon from '@mui/icons-material/CloseOutlined';
 import PipeIcon from '@mui/icons-material/TimelineOutlined';
 import PointIcon from '@mui/icons-material/PlaceOutlined';
 import FacilityIcon from '@mui/icons-material/DomainOutlined';
@@ -28,6 +42,7 @@ import {
   importApi,
   type ColumnAnalysis,
   type ImportJobStatus,
+  type ImportRunSummary,
   type TargetField,
 } from '../importApi';
 import { missingProjection, prepareUpload, type PreparedUpload } from '../shapefile';
@@ -170,6 +185,8 @@ export default function ImportHubPage() {
           }
         </StepColumn>
       </Box>
+
+      <ImportHistoryPanel />
     </Stack>
   );
 }
@@ -404,6 +421,7 @@ function ImportPanel({ dataType, format }: { dataType: DataTypeDef; format: Impo
           if (!current.state.startsWith('RUNNING')) {
             if (poll.current) window.clearInterval(poll.current);
             qc.invalidateQueries({ queryKey: ['assets'] });
+            qc.invalidateQueries({ queryKey: ['import', 'history'] });
           }
         } catch {
           if (poll.current) window.clearInterval(poll.current);
@@ -424,27 +442,29 @@ function ImportPanel({ dataType, format }: { dataType: DataTypeDef; format: Impo
 
   if (jobId) {
     const done = status && !status.state.startsWith('RUNNING');
-    const pct = status && status.total > 0
-      ? Math.round(((status.imported + status.failed) / status.total) * 100)
-      : 0;
+    const settled = (status?.imported ?? 0) + (status?.replaced ?? 0)
+      + (status?.skipped ?? 0) + (status?.failed ?? 0);
+    const pct = status && status.total > 0 ? Math.round((settled / status.total) * 100) : 0;
     return (
       <Stack spacing={1.5}>
         <Typography sx={{ fontSize: 14, fontWeight: 600 }}>
           {done ? 'Import finished' : 'Importing…'}
         </Typography>
         <LinearProgress variant="determinate" value={pct} />
-        <Typography variant="body2" color="text.secondary">
-          {status?.imported ?? 0} imported · {status?.failed ?? 0} failed
-          {status?.total ? ` of ${status.total}` : ''}
-        </Typography>
-        {status?.errors?.length ? (
-          <Alert severity="warning" variant="outlined" sx={{ maxHeight: 180, overflow: 'auto' }}>
-            {status.errors.slice(0, 20).map((e, i) => (
-              /* A frozen slice of an append-only list, never reordered or filtered — and the same
-                 message can legitimately repeat, so the text alone would not be a key. */
-              // eslint-disable-next-line react/no-array-index-key
-              <Typography key={i} variant="caption" display="block">{e}</Typography>
-            ))}
+        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+          <CountChip label="Imported" value={status?.imported ?? 0} color="success" />
+          <CountChip label="Replaced" value={status?.replaced ?? 0} color="info" />
+          <CountChip label="Skipped" value={status?.skipped ?? 0} color="warning" />
+          <CountChip label="Failed" value={status?.failed ?? 0} color="error" />
+          {status?.total ? (
+            <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', pl: 0.5 }}>
+              of {status.total} rows
+            </Typography>
+          ) : null}
+        </Stack>
+        {status?.rows?.length ? (
+          <Alert severity="warning" variant="outlined" sx={{ maxHeight: 220, overflow: 'auto', p: 0 }}>
+            <RowDetailList rows={status.rows} />
           </Alert>
         ) : null}
         {done ? (
@@ -555,6 +575,222 @@ function ImportPanel({ dataType, format }: { dataType: DataTypeDef; format: Impo
         </>
       ) : null}
     </Stack>
+  );
+}
+
+function CountChip({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: number;
+  color: 'success' | 'info' | 'warning' | 'error';
+}) {
+  return (
+    <Chip
+      size="small"
+      variant={value > 0 ? 'filled' : 'outlined'}
+      color={value > 0 ? color : 'default'}
+      label={`${value} ${label}`}
+      sx={{ fontSize: 12, fontWeight: 600 }}
+    />
+  );
+}
+
+const OUTCOME_COLOR: Record<string, 'info' | 'warning' | 'error'> = {
+  REPLACED: 'info',
+  SKIPPED: 'warning',
+  FAILED: 'error',
+};
+
+/**
+ * Per-row detail for the rows worth explaining — a plain new-row import has nothing to say beyond
+ * the imported count, so only replaced/skipped/failed rows appear here.
+ */
+function RowDetailList({ rows }: { rows: { row: number; outcome: string; message: string }[] }) {
+  return (
+    <Stack spacing={0} divider={<Box sx={{ borderBottom: 1, borderColor: 'divider' }} />}>
+      {rows.map((r) => (
+        <Stack key={`${r.row}-${r.outcome}`} direction="row" spacing={1} alignItems="baseline" sx={{ px: 1, py: 0.5 }}>
+          <Typography variant="caption" sx={{ minWidth: 44, fontWeight: 700 }}>
+            Row {r.row}
+          </Typography>
+          <Chip
+            size="small"
+            color={OUTCOME_COLOR[r.outcome] ?? 'default'}
+            label={r.outcome}
+            sx={{ height: 18, fontSize: 10.5 }}
+          />
+          <Typography variant="caption" color="text.secondary">{r.message}</Typography>
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+const HISTORY_PAGE_SIZE = 10;
+
+/**
+ * Past import runs, persisted server-side — still here after the tab that started an import is
+ * long closed. Each row is the run's counts; "View detail" pulls the per-row outcomes for the
+ * rows that were replaced, skipped or failed.
+ */
+function ImportHistoryPanel() {
+  const [page, setPage] = useState(0);
+  const [selected, setSelected] = useState<ImportRunSummary | null>(null);
+
+  const { data, isLoading, isFetching, error } = useQuery({
+    queryKey: ['import', 'history', page],
+    queryFn: () => importApi.history(page, HISTORY_PAGE_SIZE),
+  });
+
+  const runs = data?.content ?? [];
+  const totalPages = data?.totalPages ?? 0;
+
+  return (
+    <Card variant="outlined">
+      <Toolbar disableGutters sx={{ px: 1.75, py: 1.25, borderBottom: 1, borderColor: 'divider', gap: 1 }}>
+        <Typography sx={{ fontSize: 14.5, fontWeight: 700, flexGrow: 1 }}>Import History</Typography>
+        <Typography variant="caption" color="text.secondary">
+          {isFetching ? 'Updating…' : `Page ${page + 1} of ${Math.max(totalPages, 1)}`}
+        </Typography>
+        <IconButton size="small" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))} aria-label="Previous page">
+          <ChevronLeftIcon fontSize="small" />
+        </IconButton>
+        <IconButton size="small" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)} aria-label="Next page">
+          <ChevronIcon fontSize="small" />
+        </IconButton>
+      </Toolbar>
+
+      {error ? (
+        <Alert severity="error" variant="outlined" sx={{ m: 1.75 }}>
+          Could not load import history. {problemMessage(error)}
+        </Alert>
+      ) : null}
+
+      {!isLoading && !error && runs.length === 0 ? (
+        <Typography variant="body2" color="text.secondary" sx={{ p: 1.75 }}>
+          No imports yet.
+        </Typography>
+      ) : null}
+
+      {runs.length > 0 ? (
+        <TableContainer>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>File</TableCell>
+                <TableCell>Type</TableCell>
+                <TableCell>Started</TableCell>
+                <TableCell>By</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Total</TableCell>
+                <TableCell align="right">Imported</TableCell>
+                <TableCell align="right">Replaced</TableCell>
+                <TableCell align="right">Skipped</TableCell>
+                <TableCell align="right">Failed</TableCell>
+                <TableCell />
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {runs.map((run) => (
+                <TableRow key={run.id} hover>
+                  <TableCell sx={{ maxWidth: 220 }}>
+                    <Typography noWrap variant="body2">{run.fileName ?? '—'}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{run.assetType}</Typography>
+                    <Typography variant="caption" color="text.secondary">{run.format}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{new Date(run.startedAt).toLocaleString()}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">{run.actorUsername ?? '—'}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      label={run.state}
+                      color={run.state === 'COMPLETED' ? 'success' : run.state === 'FAILED' ? 'error' : 'default'}
+                      sx={{ height: 20, fontSize: 11 }}
+                    />
+                  </TableCell>
+                  <TableCell align="right">{run.total}</TableCell>
+                  <TableCell align="right">{run.imported}</TableCell>
+                  <TableCell align="right">{run.replaced}</TableCell>
+                  <TableCell align="right">{run.skipped}</TableCell>
+                  <TableCell align="right">{run.failed}</TableCell>
+                  <TableCell align="right">
+                    <Button size="small" onClick={() => setSelected(run)}>Details</Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      ) : null}
+
+      {selected ? <RunDetailDialog run={selected} onClose={() => setSelected(null)} /> : null}
+    </Card>
+  );
+}
+
+function RunDetailDialog({ run, onClose }: { run: ImportRunSummary; onClose: () => void }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['import', 'history', 'detail', run.id],
+    queryFn: () => importApi.historyDetail(run.id),
+  });
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography noWrap sx={{ fontSize: 15, fontWeight: 700 }}>{run.fileName ?? 'Import'}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {new Date(run.startedAt).toLocaleString()} · {run.actorUsername ?? 'unknown'}
+          </Typography>
+        </Box>
+        <IconButton size="small" onClick={onClose} aria-label="Close">
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={1.5}>
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+            <CountChip label="Imported" value={run.imported} color="success" />
+            <CountChip label="Replaced" value={run.replaced} color="info" />
+            <CountChip label="Skipped" value={run.skipped} color="warning" />
+            <CountChip label="Failed" value={run.failed} color="error" />
+            <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', pl: 0.5 }}>
+              of {run.total} rows
+            </Typography>
+          </Stack>
+          {run.errorMessage ? (
+            <Alert severity="error" variant="outlined">{run.errorMessage}</Alert>
+          ) : null}
+          {isLoading ? (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <CircularProgress size={16} />
+              <Typography variant="body2" color="text.secondary">Loading row detail…</Typography>
+            </Stack>
+          ) : null}
+          {error ? (
+            <Alert severity="error" variant="outlined">Could not load row detail. {problemMessage(error)}</Alert>
+          ) : null}
+          {data?.rows?.length ? (
+            <Box sx={{ maxHeight: 320, overflow: 'auto', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+              <RowDetailList rows={data.rows} />
+            </Box>
+          ) : !isLoading ? (
+            <Typography variant="body2" color="text.secondary">
+              Every row was imported as a new asset — nothing to detail beyond the count above.
+            </Typography>
+          ) : null}
+        </Stack>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -67,6 +67,9 @@ public final class MetadataDtos {
             String sampleValue,
             boolean mandatory,
             @Schema(name = "unique") boolean uniqueValue,
+            @Schema(description = "True when the bulk importer uses this field (alongside Asset "
+                    + "Code) to recognise a row it has already seen")
+            boolean duplicateCheck,
             boolean editable,
             boolean visible,
             boolean active,
@@ -87,8 +90,8 @@ public final class MetadataDtos {
             return new AttributeResponse(a.getId(), a.getLayerId(), a.getFieldName(),
                     a.getDisplayName(), a.getDescription(), a.getDataType().name(), a.getMaxLength(),
                     a.getNumericPrecision(), a.getNumericScale(), a.getDefaultValue(),
-                    a.getSampleValue(), a.isMandatory(), a.isUniqueValue(), a.isEditable(),
-                    a.isVisible(), a.isActive(), a.isSystem(), a.getStorage().name(),
+                    a.getSampleValue(), a.isMandatory(), a.isUniqueValue(), a.isDuplicateCheck(),
+                    a.isEditable(), a.isVisible(), a.isActive(), a.isSystem(), a.getStorage().name(),
                     a.getStorage().isImportable(), a.getSortOrder(),
                     a.getCreatedBy(), a.getCreatedAt(), a.getUpdatedBy(), a.getUpdatedAt());
         }
@@ -170,6 +173,9 @@ public final class MetadataDtos {
             @Size(max = 255) String sampleValue,
             boolean mandatory,
             boolean unique,
+            @Schema(description = "Use this field (alongside Asset Code) to recognise a row a bulk "
+                    + "import has already seen")
+            boolean duplicateCheck,
             @Schema(defaultValue = "true") Boolean editable,
             @Schema(defaultValue = "true") Boolean visible,
             @Schema(defaultValue = "true") Boolean active,
@@ -200,6 +206,7 @@ public final class MetadataDtos {
             @Size(max = 255) String sampleValue,
             Boolean mandatory,
             Boolean unique,
+            Boolean duplicateCheck,
             Boolean editable,
             Boolean visible,
             Integer sortOrder,

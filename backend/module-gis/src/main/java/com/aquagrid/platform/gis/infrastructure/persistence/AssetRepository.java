@@ -239,6 +239,14 @@ public interface AssetRepository extends JpaRepository<Asset, UUID> {
     boolean existsByOrganizationIdAndAssetCode(UUID organizationId, String assetCode);
 
     /**
+     * The asset an import row's {@code asset_code} column already belongs to, if any.
+     *
+     * <p>Backs the bulk importer's replace path: when a mapped {@code asset_code} matches an
+     * existing asset, that row updates it instead of colliding with {@code uq_assets_org_code}.
+     */
+    java.util.Optional<Asset> findByOrganizationIdAndAssetCode(UUID organizationId, String assetCode);
+
+    /**
      * Whether any asset of a type already carries this value under an attribute-bag key.
      *
      * <p>Backs the {@code unique} flag on catalogue attributes that live in the JSONB bag, where no
@@ -259,6 +267,25 @@ public interface AssetRepository extends JpaRepository<Asset, UUID> {
                                    @Param("assetType") String assetType,
                                    @Param("key") String key,
                                    @Param("value") String value);
+
+    /**
+     * The asset that already carries this value under an attribute-bag key, if any.
+     *
+     * <p>The read counterpart of {@link #existsByAttributeValue}, used by the bulk importer to
+     * find the row to update when a {@code unique} field matches something already stored, instead
+     * of only being able to say that a collision exists.
+     */
+    @Query(value = """
+            SELECT * FROM gis.assets a
+            WHERE a.organization_id = :organizationId
+              AND a.asset_type = :assetType
+              AND a.attributes ->> cast(:key as text) = cast(:value as text)
+            LIMIT 1
+            """, nativeQuery = true)
+    java.util.Optional<Asset> findFirstByAttributeValue(@Param("organizationId") UUID organizationId,
+                                                        @Param("assetType") String assetType,
+                                                        @Param("key") String key,
+                                                        @Param("value") String value);
 
     /**
      * Moves every stored value of one attribute-bag key to a new key.

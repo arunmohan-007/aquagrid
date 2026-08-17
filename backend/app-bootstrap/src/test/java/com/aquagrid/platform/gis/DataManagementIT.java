@@ -95,6 +95,8 @@ class DataManagementIT extends AbstractIntegrationTest {
         assertThat(assetCode.storage()).isEqualTo(AttributeStorage.COLUMN);
         assertThat(assetCode.mandatory()).isTrue();
         assertThat(assetCode.uniqueValue()).isTrue();
+        // Every layer's built-in identity field, already usable as the bulk importer's re-import key.
+        assertThat(assetCode.duplicateCheck()).isTrue();
 
         // The pipe-network deliverable fields the importer used to hard-code are catalogue rows now.
         List<AttributeDefinition> pipelines =
@@ -165,7 +167,7 @@ class DataManagementIT extends AbstractIntegrationTest {
         metadataService.create(orgId, null, "test", new AttributeCommands.Create(
                 meters.getId(), fieldName, "Consumer Number", "The utility's consumer reference.",
                 AttributeDataType.TEXT, 40, null, null, null, "TN-0001",
-                false, false, true, true, true, null, "Added by the integration test"));
+                false, false, false, true, true, true, null, "Added by the integration test"));
 
         // The importer offers it, because it reads the catalogue rather than a list in its own file.
         assertThat(metadataApi.definitionsForAssetType(orgId, AssetType.METER))
@@ -179,8 +181,8 @@ class DataManagementIT extends AbstractIntegrationTest {
                 """.formatted(assetCode);
 
         UUID jobId = UUID.randomUUID();
-        importService.runImport(jobId, orgId, null, "text/csv", csv.getBytes(StandardCharsets.UTF_8),
-                AssetType.METER, layer("meters").getId(), Map.of(
+        importService.runImport(jobId, orgId, null, "test", "meters.csv", "text/csv",
+                csv.getBytes(StandardCharsets.UTF_8), AssetType.METER, layer("meters").getId(), Map.of(
                         "Meter_No", "asset_code",
                         "Consumer", fieldName,
                         "Easting", "lon",
@@ -188,7 +190,7 @@ class DataManagementIT extends AbstractIntegrationTest {
         awaitImport(jobId);
 
         BulkImportService.JobStatus status = importService.status(jobId);
-        assertThat(status.errors).isEmpty();
+        assertThat(status.rows).isEmpty();
         assertThat(status.imported).isEqualTo(1);
 
         Asset imported = assetRepository
@@ -215,11 +217,11 @@ class DataManagementIT extends AbstractIntegrationTest {
         LayerAttribute attribute = metadataService.create(orgId, null, "test",
                 new AttributeCommands.Create(meters.getId(), fieldName, "Ward Code", null,
                         AttributeDataType.TEXT, 20, null, null, null, "W-07",
-                        false, false, true, true, true, null, null));
+                        false, false, false, true, true, true, null, null));
 
         String assetCode = unique("DM-WARD").toUpperCase();
         UUID jobId = UUID.randomUUID();
-        importService.runImport(jobId, orgId, null, "text/csv",
+        importService.runImport(jobId, orgId, null, "test", "meters.csv", "text/csv",
                 ("Code,Ward,X,Y\n%s,W-07,78.14,11.66\n".formatted(assetCode))
                         .getBytes(StandardCharsets.UTF_8),
                 AssetType.METER, layer("meters").getId(),
@@ -261,11 +263,11 @@ class DataManagementIT extends AbstractIntegrationTest {
         LayerAttribute attribute = metadataService.create(orgId, null, "test",
                 new AttributeCommands.Create(meters.getId(), original, "Old Reference", null,
                         AttributeDataType.TEXT, 40, null, null, null, "R-1",
-                        false, false, true, true, true, null, null));
+                        false, false, false, true, true, true, null, null));
 
         String assetCode = unique("DM-RENAME").toUpperCase();
         UUID jobId = UUID.randomUUID();
-        importService.runImport(jobId, orgId, null, "text/csv",
+        importService.runImport(jobId, orgId, null, "test", "meters.csv", "text/csv",
                 ("Code,Ref,X,Y\n%s,R-42,78.14,11.66\n".formatted(assetCode))
                         .getBytes(StandardCharsets.UTF_8),
                 AssetType.METER, layer("meters").getId(),
@@ -320,7 +322,7 @@ class DataManagementIT extends AbstractIntegrationTest {
         // The label is still the tenant's to change — the lock is on identity, not on wording.
         LayerAttribute relabelled = metadataService.update(assetCode.getId(), orgId, null, "test",
                 new AttributeCommands.Update(null, "Meter Number", null, null, null, null, null,
-                        null, null, null, null, null, null, null, false, "Local wording"));
+                        null, null, null, null, null, null, null, null, false, "Local wording"));
         assertThat(relabelled.getDisplayName()).isEqualTo("Meter Number");
     }
 
@@ -372,7 +374,7 @@ class DataManagementIT extends AbstractIntegrationTest {
         metadataService.deactivate(attribute.getId(), orgId, null, "test", "retired");
 
         UUID jobId = UUID.randomUUID();
-        importService.runImport(jobId, orgId, null, "text/csv",
+        importService.runImport(jobId, orgId, null, "test", "meters.csv", "text/csv",
                 "Code,Dropped,X,Y\nA-1,value,78.14,11.66\n".getBytes(StandardCharsets.UTF_8),
                 AssetType.METER, layer("meters").getId(),
                 Map.of("Code", "asset_code", "Dropped", fieldName, "X", "lon", "Y", "lat"));
@@ -397,12 +399,12 @@ class DataManagementIT extends AbstractIntegrationTest {
     private static AttributeCommands.Create create(Layer layer, String fieldName) {
         return new AttributeCommands.Create(layer.getId(), fieldName, null, null,
                 AttributeDataType.TEXT, 40, null, null, null, "sample",
-                false, false, true, true, true, null, null);
+                false, false, false, true, true, true, null, null);
     }
 
     private static AttributeCommands.Update update(String fieldName, boolean confirm) {
         return new AttributeCommands.Update(fieldName, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, confirm, "renamed by test");
+                null, null, null, null, null, null, null, confirm, "renamed by test");
     }
 
     /**

@@ -75,7 +75,7 @@ public class DataManagementController {
      */
     private static final Set<String> SORTABLE = Set.of(
             "fieldName", "displayName", "dataType", "maxLength", "mandatory", "uniqueValue",
-            "editable", "visible", "active", "sortOrder", "createdAt", "updatedAt");
+            "duplicateCheck", "editable", "visible", "active", "sortOrder", "createdAt", "updatedAt");
 
     private static final int MAX_PAGE_SIZE = 200;
 
@@ -125,7 +125,8 @@ public class DataManagementController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size,
             @Parameter(description = "Sortable: " + "fieldName, displayName, dataType, maxLength, "
-                    + "mandatory, uniqueValue, editable, visible, active, sortOrder, createdAt, updatedAt")
+                    + "mandatory, uniqueValue, duplicateCheck, editable, visible, active, sortOrder, "
+                    + "createdAt, updatedAt")
             @RequestParam(defaultValue = "sortOrder") String sort,
             @RequestParam(defaultValue = "ASC") Sort.Direction direction) {
 
@@ -174,6 +175,7 @@ public class DataManagementController {
                         request.description(), request.dataType(), request.maxLength(),
                         request.numericPrecision(), request.numericScale(), request.defaultValue(),
                         request.sampleValue(), request.mandatory(), request.unique(),
+                        request.duplicateCheck(),
                         request.editable() == null || request.editable(),
                         request.visible() == null || request.visible(),
                         request.active() == null || request.active(),
@@ -210,7 +212,8 @@ public class DataManagementController {
                         request.fieldName(), request.displayName(), request.description(),
                         request.dataType(), request.maxLength(), request.numericPrecision(),
                         request.numericScale(), request.defaultValue(), request.sampleValue(),
-                        request.mandatory(), request.unique(), request.editable(), request.visible(),
+                        request.mandatory(), request.unique(), request.duplicateCheck(),
+                        request.editable(), request.visible(),
                         request.sortOrder(), request.confirmBreakingChange(), request.changeReason())));
     }
 
@@ -319,7 +322,7 @@ public class DataManagementController {
 
         StringBuilder csv = new StringBuilder();
         csv.append("Layer,Field Name,Display Name,Description,Data Type,Length,Precision,Scale,")
-                .append("Default Value,Sample Value,Mandatory,Unique,Editable,Visible,Active,")
+                .append("Default Value,Sample Value,Mandatory,Unique,Duplicate Check,Editable,Visible,Active,")
                 .append("Created By,Created Date,Modified By,Modified Date\n");
         rows.forEach(a -> csv
                 .append(csvCell(layerTitles.getOrDefault(a.getLayerId(), ""))).append(',')
@@ -334,6 +337,7 @@ public class DataManagementController {
                 .append(csvCell(a.getSampleValue())).append(',')
                 .append(yesNo(a.isMandatory())).append(',')
                 .append(yesNo(a.isUniqueValue())).append(',')
+                .append(yesNo(a.isDuplicateCheck())).append(',')
                 .append(yesNo(a.isEditable())).append(',')
                 .append(yesNo(a.isVisible())).append(',')
                 .append(yesNo(a.isActive())).append(',')

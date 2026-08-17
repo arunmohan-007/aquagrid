@@ -608,7 +608,7 @@ class VectorTileIT extends AbstractIntegrationTest {
         metadataService.create(orgId, null, "test", new AttributeCommands.Create(
                 layer.getId(), fieldName, fieldName, null, type,
                 null, null, null, null, null,
-                false, false, true, true, true, 0, "test fixture"));
+                false, false, false, true, true, true, 0, "test fixture"));
     }
 
     private Asset asset(UUID orgId, Layer layer, Map<String, Object> geoJson) {

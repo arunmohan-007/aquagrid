@@ -36,6 +36,7 @@ public record AttributeDefinition(
         String sampleValue,
         boolean mandatory,
         boolean uniqueValue,
+        boolean duplicateCheck,
         boolean editable,
         boolean visible,
         boolean system,
@@ -51,8 +52,8 @@ public record AttributeDefinition(
                 a.getId(), a.getLayerId(), a.getFieldName(), a.getDisplayName(), a.getDescription(),
                 a.getDataType(), a.getMaxLength(), a.getNumericPrecision(), a.getNumericScale(),
                 a.getDefaultValue(), a.getSampleValue(), a.isMandatory(), a.isUniqueValue(),
-                a.isEditable(), a.isVisible(), a.isSystem(), a.getStorage(), a.getStorageTable(),
-                a.getStorageTarget(), a.getSortOrder(),
+                a.isDuplicateCheck(), a.isEditable(), a.isVisible(), a.isSystem(), a.getStorage(),
+                a.getStorageTable(), a.getStorageTarget(), a.getSortOrder(),
                 rules.stream().map(ValidationRule::from).toList());
     }
 

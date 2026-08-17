@@ -1,4 +1,5 @@
 import { apiGet, http } from '@/lib/api/httpClient';
+import type { PageResponse } from '@/features/users/types';
 import type { GeometryKind } from './catalogue';
 
 /**
@@ -25,12 +26,46 @@ export interface ColumnAnalysis {
   format: string;
 }
 
+/** One row's outcome, present for every row that was not a plain new-row import. */
+export interface ImportRowDetail {
+  row: number;
+  outcome: 'REPLACED' | 'SKIPPED' | 'FAILED';
+  message: string;
+}
+
 export interface ImportJobStatus {
   state: string;
   total: number;
   imported: number;
+  replaced: number;
+  skipped: number;
   failed: number;
-  errors: string[];
+  rows: ImportRowDetail[];
+}
+
+/** One row in the import history list — a past run's counts, without its per-row detail. */
+export interface ImportRunSummary {
+  id: string;
+  jobId: string | null;
+  fileName: string | null;
+  format: string;
+  assetType: string;
+  layerId: string | null;
+  state: string;
+  total: number;
+  imported: number;
+  replaced: number;
+  skipped: number;
+  failed: number;
+  actorUsername: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  errorMessage: string | null;
+}
+
+export interface ImportRunDetail {
+  summary: ImportRunSummary;
+  rows: ImportRowDetail[];
 }
 
 /**
@@ -80,4 +115,11 @@ export const importApi = {
   },
 
   status: (jobId: string) => apiGet<ImportJobStatus>(`/assets/bulk-import/${jobId}`),
+
+  /** Persisted run history, newest first — survives closing the tab that started the import. */
+  history: (page = 0, size = 20) =>
+    apiGet<PageResponse<ImportRunSummary>>('/assets/bulk-import/history', { params: { page, size } }),
+
+  historyDetail: (id: string) =>
+    apiGet<ImportRunDetail>(`/assets/bulk-import/history/${id}`),
 };

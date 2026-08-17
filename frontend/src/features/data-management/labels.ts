@@ -42,6 +42,7 @@ export const COLUMNS: ColumnDef[] = [
   { id: 'sampleValue', label: 'Sample Value', width: 170 },
   { id: 'mandatory', label: 'Mandatory', width: 110, sort: 'mandatory', align: 'center' },
   { id: 'unique', label: 'Unique', width: 96, sort: 'uniqueValue', align: 'center' },
+  { id: 'duplicateCheck', label: 'Duplicate Check', width: 130, sort: 'duplicateCheck', align: 'center' },
   { id: 'editable', label: 'Editable', width: 100, sort: 'editable', align: 'center' },
   { id: 'visible', label: 'Visible', width: 96, sort: 'visible', align: 'center' },
   { id: 'active', label: 'Active', width: 96, sort: 'active', align: 'center' },

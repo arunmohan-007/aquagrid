@@ -252,6 +252,7 @@ public class LayerMetadataService implements LayerMetadataApi {
                 command.defaultValue(), command.sampleValue());
         attribute.setMandatory(command.mandatory());
         attribute.setUniqueValue(command.uniqueValue());
+        attribute.setDuplicateCheck(command.duplicateCheck());
         attribute.setEditable(command.editable());
         attribute.setVisible(command.visible());
         attribute.setActive(command.active());
@@ -351,7 +352,7 @@ public class LayerMetadataService implements LayerMetadataApi {
      * API uses for secrets, and for the same reason: a partial update sent by a form that only
      * rendered half the fields must not blank the half it did not show.
      *
-     * <p>Mandatory and unique are frozen on system attributes. {@code name} and {@code asset_code}
+     * <p>Mandatory, unique and duplicate-check are frozen on system attributes. {@code name} and {@code asset_code}
      * are NOT NULL columns with a unique index behind them; letting a dropdown say otherwise would
      * produce a catalogue that disagrees with the database, and the database would win at the worst
      * possible moment — halfway through an import.
@@ -368,15 +369,18 @@ public class LayerMetadataService implements LayerMetadataApi {
         if (command.visible() != null) attribute.setVisible(command.visible());
         if (command.sortOrder() != null) attribute.setSortOrder(command.sortOrder());
 
-        if (command.mandatory() != null || command.uniqueValue() != null) {
+        if (command.mandatory() != null || command.uniqueValue() != null
+                || command.duplicateCheck() != null) {
             if (attribute.isSystem()) {
                 throw new BusinessException(ErrorCode.ATTRIBUTE_IS_SYSTEM,
                         "'" + attribute.getFieldName() + "' on " + layer.getTitle() + " is backed by a "
-                                + "database column whose NOT NULL and uniqueness are already decided. "
-                                + "Changing them here would let the catalogue disagree with the table.");
+                                + "database column whose NOT NULL, uniqueness and duplicate-check role "
+                                + "are already decided. Changing them here would let the catalogue "
+                                + "disagree with the table.");
             }
             if (command.mandatory() != null) attribute.setMandatory(command.mandatory());
             if (command.uniqueValue() != null) attribute.setUniqueValue(command.uniqueValue());
+            if (command.duplicateCheck() != null) attribute.setDuplicateCheck(command.duplicateCheck());
         }
     }
 
@@ -603,6 +607,7 @@ public class LayerMetadataService implements LayerMetadataApi {
         state.put("sampleValue", a.getSampleValue());
         state.put("mandatory", a.isMandatory());
         state.put("unique", a.isUniqueValue());
+        state.put("duplicateCheck", a.isDuplicateCheck());
         state.put("editable", a.isEditable());
         state.put("visible", a.isVisible());
         state.put("active", a.isActive());

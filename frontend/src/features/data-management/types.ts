@@ -48,6 +48,8 @@ export interface LayerAttribute {
   sampleValue: string | null;
   mandatory: boolean;
   unique: boolean;
+  /** True when the bulk importer uses this field (alongside Asset Code) to recognise a row it has already seen. */
+  duplicateCheck: boolean;
   editable: boolean;
   visible: boolean;
   active: boolean;
@@ -141,6 +143,7 @@ export interface CreateAttributeRequest {
   sampleValue?: string | undefined;
   mandatory: boolean;
   unique: boolean;
+  duplicateCheck: boolean;
   editable: boolean;
   visible: boolean;
   active: boolean;
@@ -160,6 +163,7 @@ export interface UpdateAttributeRequest {
   sampleValue?: string | undefined;
   mandatory?: boolean | undefined;
   unique?: boolean | undefined;
+  duplicateCheck?: boolean | undefined;
   editable?: boolean | undefined;
   visible?: boolean | undefined;
   /**
@@ -179,6 +183,7 @@ export type SortableColumn =
   | 'maxLength'
   | 'mandatory'
   | 'uniqueValue'
+  | 'duplicateCheck'
   | 'editable'
   | 'visible'
   | 'active'

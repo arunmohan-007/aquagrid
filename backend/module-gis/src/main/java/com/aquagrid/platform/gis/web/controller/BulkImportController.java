@@ -3,6 +3,7 @@ package com.aquagrid.platform.gis.web.controller;
 import com.aquagrid.platform.common.error.BusinessException;
 import com.aquagrid.platform.common.error.ErrorCode;
 import com.aquagrid.platform.common.web.ApiPaths;
+import com.aquagrid.platform.common.web.PageResponse;
 import com.aquagrid.platform.gis.api.AttributeDefinition;
 import com.aquagrid.platform.gis.api.LayerMetadataApi;
 import com.aquagrid.platform.gis.application.command.LayerCommands;
@@ -28,6 +29,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -200,8 +203,8 @@ public class BulkImportController {
         AssetType type = layer != null ? layer.getAssetType() : parseAssetType(defaultType);
 
         bulkImportService.runImport(jobId, principal.organizationId(), principal.userId(),
-                file.getContentType(), file.getBytes(), type,
-                layer == null ? null : layer.getId(), parseMapping(mapping));
+                principal.username(), file.getOriginalFilename(), file.getContentType(), file.getBytes(),
+                type, layer == null ? null : layer.getId(), parseMapping(mapping));
         return Map.of("jobId", jobId, "status", "RUNNING");
     }
 
@@ -258,5 +261,28 @@ public class BulkImportController {
     @Operation(summary = "Poll a bulk import job's status")
     public JobStatus status(@PathVariable UUID jobId) {
         return bulkImportService.status(jobId);
+    }
+
+    @GetMapping("/history")
+    @PreAuthorize("hasAuthority('" + Permissions.ASSET_READ + "')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "List past bulk import runs",
+            description = "Persisted history, so a run started last week is still visible after the "
+                    + "polling UI that started it has long since closed. Newest first.")
+    public PageResponse<BulkImportService.ImportRunSummary> history(
+            @PageableDefault(size = 20) Pageable pageable) {
+        return PageResponse.of(bulkImportService.history(
+                SecurityUtils.requirePrincipal().organizationId(), pageable));
+    }
+
+    @GetMapping("/history/{id}")
+    @PreAuthorize("hasAuthority('" + Permissions.ASSET_READ + "')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Full detail for one past import run",
+            description = "The run's counts plus the per-row outcome for every row that was replaced, "
+                    + "skipped or failed. A plain successful insert is not listed row by row here — it "
+                    + "is fully accounted for by the summary's imported count.")
+    public BulkImportService.ImportRunDetail historyDetail(@PathVariable UUID id) {
+        return bulkImportService.historyDetail(SecurityUtils.requirePrincipal().organizationId(), id);
     }
 }

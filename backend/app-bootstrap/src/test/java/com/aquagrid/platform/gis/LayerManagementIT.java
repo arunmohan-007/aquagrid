@@ -330,7 +330,7 @@ class LayerManagementIT extends AbstractIntegrationTest {
         // The field comes from Data Management, exactly as it would for any other consumer.
         LayerAttribute condition = metadataService.create(orgId, null, "test", new AttributeCommands.Create(
                 layer.getId(), "condition", "Condition", "Field condition", AttributeDataType.TEXT,
-                40, null, null, null, "GOOD", false, false, true, true, true, null, null));
+                40, null, null, null, "GOOD", false, false, false, true, true, true, null, null));
         assertThat(condition.getFieldName()).isEqualTo("condition");
 
         var saved = styleService.save(orgId, null, "test", null, new StyleCommands.Save(
@@ -374,7 +374,7 @@ class LayerManagementIT extends AbstractIntegrationTest {
                 create(unique("labelled"), "Labelled", AssetType.CUSTOM, GeometryType.POINT));
         metadataService.create(orgId, null, "test", new AttributeCommands.Create(
                 layer.getId(), "asset_id", "Asset Id", null, AttributeDataType.TEXT,
-                40, null, null, null, "BW/KDB/23", false, false, true, true, true, null, null));
+                40, null, null, null, "BW/KDB/23", false, false, false, true, true, true, null, null));
 
         styleService.save(orgId, null, "test", null, new StyleCommands.Save(
                 layer.getId(), "Labelled", null, StyleType.SIMPLE, null, true, true, 0, 24,
@@ -543,7 +543,7 @@ class LayerManagementIT extends AbstractIntegrationTest {
 
         metadataService.create(orgId, null, "test", new AttributeCommands.Create(
                 layer.getId(), "pole_number", "Pole Number", null, AttributeDataType.TEXT,
-                40, null, null, null, "P-1", false, false, true, true, true, null, null));
+                40, null, null, null, "P-1", false, false, false, true, true, true, null, null));
 
         assertThat(metadataService.definitionsForLayer(orgId, layer.getId()))
                 .extracting(com.aquagrid.platform.gis.api.AttributeDefinition::fieldName)
@@ -628,7 +628,7 @@ class LayerManagementIT extends AbstractIntegrationTest {
         // A field for the classified templates to classify on, from Data Management as always.
         metadataService.create(orgId, null, "test", new AttributeCommands.Create(
                 layer.getId(), "status", "Status", null, AttributeDataType.TEXT,
-                20, null, null, null, "IN_SERVICE", false, false, true, true, true, null, null));
+                20, null, null, null, "IN_SERVICE", false, false, false, true, true, true, null, null));
 
         List<StyleTemplates.Template> templates = StyleTemplates.forGeometry(GeometryType.GEOMETRY);
         assertThat(templates).isNotEmpty();

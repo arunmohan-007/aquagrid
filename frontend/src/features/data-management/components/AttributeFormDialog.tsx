@@ -37,6 +37,7 @@ interface FormState {
   sampleValue: string;
   mandatory: boolean;
   unique: boolean;
+  duplicateCheck: boolean;
   editable: boolean;
   visible: boolean;
   active: boolean;
@@ -56,6 +57,7 @@ const EMPTY: FormState = {
   sampleValue: '',
   mandatory: false,
   unique: false,
+  duplicateCheck: false,
   editable: true,
   visible: true,
   active: true,
@@ -117,6 +119,7 @@ export function AttributeFormDialog({
         sampleValue: editing.sampleValue ?? '',
         mandatory: editing.mandatory,
         unique: editing.unique,
+        duplicateCheck: editing.duplicateCheck,
         editable: editing.editable,
         visible: editing.visible,
         active: editing.active,
@@ -181,10 +184,11 @@ export function AttributeFormDialog({
               : undefined,
             defaultValue: form.defaultValue.trim(),
             sampleValue: form.sampleValue.trim(),
-            // Mandatory and unique are backed by database constraints on system fields, so they
-            // are not sent for one — the server refuses, and asking it to is a wasted round trip.
+            // Mandatory, unique and duplicate-check are locked on system fields, so they are not
+            // sent for one — the server refuses, and asking it to is a wasted round trip.
             mandatory: isSystem ? undefined : form.mandatory,
             unique: isSystem ? undefined : form.unique,
+            duplicateCheck: isSystem ? undefined : form.duplicateCheck,
             editable: form.editable,
             visible: form.visible,
             confirmBreakingChange,
@@ -207,6 +211,7 @@ export function AttributeFormDialog({
           sampleValue: form.sampleValue.trim() || undefined,
           mandatory: form.mandatory,
           unique: form.unique,
+          duplicateCheck: form.duplicateCheck,
           editable: form.editable,
           visible: form.visible,
           active: form.active,
@@ -432,6 +437,13 @@ export function AttributeFormDialog({
               checked={form.unique}
               disabled={isSystem}
               onChange={(value) => set('unique', value)}
+            />
+            <FlagSwitch
+              label="Consider for duplicate check"
+              hint="Bulk imports use this field (with Asset Code) to recognise a row already on file, and update it instead of adding a copy."
+              checked={form.duplicateCheck}
+              disabled={isSystem}
+              onChange={(value) => set('duplicateCheck', value)}
             />
             <FlagSwitch
               label="Editable"

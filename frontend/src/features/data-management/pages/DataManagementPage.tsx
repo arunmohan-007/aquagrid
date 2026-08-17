@@ -539,6 +539,7 @@ function AttributeRow({
     sampleValue: attribute.sampleValue ?? '—',
     mandatory: <YesNo value={attribute.mandatory} />,
     unique: <YesNo value={attribute.unique} />,
+    duplicateCheck: <YesNo value={attribute.duplicateCheck} />,
     editable: <YesNo value={attribute.editable} />,
     visible: <YesNo value={attribute.visible} />,
     active: <YesNo value={attribute.active} />,
