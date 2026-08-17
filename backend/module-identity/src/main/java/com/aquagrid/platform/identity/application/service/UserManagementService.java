@@ -80,7 +80,8 @@ public class UserManagementService {
     @Transactional(readOnly = true)
     public Page<UserManagementResponses.UserSummary> listUsers(UUID organizationId, UserStatus status,
                                                                String search, Pageable pageable) {
-        Page<User> page = userRepository.findForTenant(organizationId, status, search, pageable);
+        Page<User> page = userRepository.findForTenant(organizationId, status == null ? null : status.name(),
+                search, pageable);
         List<UUID> ids = page.getContent().stream().map(User::getId).toList();
         Map<UUID, User> withRoles = userRepository.findAllWithRolesByIdIn(ids).stream()
                 .collect(java.util.stream.Collectors.toMap(User::getId, u -> u));

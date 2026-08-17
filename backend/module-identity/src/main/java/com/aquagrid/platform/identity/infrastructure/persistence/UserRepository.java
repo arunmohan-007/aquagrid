@@ -1,6 +1,5 @@
 package com.aquagrid.platform.identity.infrastructure.persistence;
 
-import com.aquagrid.platform.identity.domain.enums.UserStatus;
 import com.aquagrid.platform.identity.domain.model.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -81,7 +80,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                    OR lower(u.username) LIKE lower(concat('%', cast(:search as string), '%')))
             """)
     Page<User> findForTenant(@Param("organizationId") UUID organizationId,
-                             @Param("status") UserStatus status,
+                             @Param("status") String status,
                              @Param("search") String search,
                              Pageable pageable);
 
