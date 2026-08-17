@@ -93,8 +93,10 @@ core.organizations
 | `version` | bigint | optimistic locking |
 
 *Design decision:* `email` is globally unique, so `POST /auth/login` works with an email alone.
-Login with `username` additionally requires `organizationCode`. One human = one account in v1;
-multi-org membership is a v2 concern that would introduce an `identity.user_organizations` join
+Login with `username` resolves across all tenants; if the same username exists in more than one
+organization the identifier is ambiguous and the login is rejected as invalid credentials. One
+human = one account in v1; multi-org membership is a v2 concern that would introduce an
+`identity.user_organizations` join
 table without changing any other design.
 
 ### `identity.permissions` — the authorisation vocabulary

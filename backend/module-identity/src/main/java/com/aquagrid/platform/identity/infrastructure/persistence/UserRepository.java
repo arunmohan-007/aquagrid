@@ -27,14 +27,17 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @EntityGraph(attributePaths = {"organization", "roles", "roles.permissions"})
     Optional<User> findByEmailIgnoreCase(String email);
 
+    /**
+     * All users sharing a username. Username is unique only within a tenant (see
+     * {@code uq_users_org_username}), so with no organisation code to disambiguate, the caller must
+     * treat more than one match as unresolvable rather than picking one arbitrarily.
+     */
     @EntityGraph(attributePaths = {"organization", "roles", "roles.permissions"})
     @Query("""
             SELECT u FROM User u
             WHERE lower(u.username) = lower(:username)
-              AND lower(u.organization.code) = lower(:organizationCode)
             """)
-    Optional<User> findByUsernameAndOrganizationCode(@Param("username") String username,
-                                                     @Param("organizationCode") String organizationCode);
+    java.util.List<User> findAllByUsernameIgnoreCase(@Param("username") String username);
 
     @EntityGraph(attributePaths = {"organization", "roles", "roles.permissions"})
     @Query("SELECT u FROM User u WHERE u.id = :id")

@@ -19,7 +19,6 @@ public final class AuthCommands {
     public record Login(
             String identifier,
             String password,
-            String organizationCode,
             String deviceLabel,
             String clientIp,
             String userAgent

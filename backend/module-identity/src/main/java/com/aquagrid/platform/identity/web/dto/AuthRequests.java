@@ -25,7 +25,7 @@ public final class AuthRequests {
 
     @Schema(name = "LoginRequest", description = "Credential (first factor) authentication")
     public record Login(
-            @Schema(description = "Email address, or username when organizationCode is supplied",
+            @Schema(description = "Email address or username",
                     example = "j.mathew@kwa.kerala.gov.in", requiredMode = Schema.RequiredMode.REQUIRED)
             @NotBlank(message = "Email or username is required")
             @Size(max = 320)
@@ -34,11 +34,6 @@ public final class AuthRequests {
             @Schema(description = "Password", requiredMode = Schema.RequiredMode.REQUIRED)
             @NotBlank(message = "Password is required")
             String password,
-
-            @Schema(description = "Organization code. Required only when signing in with a username.",
-                    example = "KWA-TVM")
-            @Size(max = 60)
-            String organizationCode,
 
             @Schema(description = "Human-readable device label shown on the sessions screen",
                     example = "Chrome on Windows")

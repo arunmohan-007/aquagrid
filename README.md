@@ -118,7 +118,7 @@ vulnerability that produces no symptoms until it is exploited.
 
 **Backend**
 
-- Password sign-in by email, or by username plus organisation code
+- Password sign-in by email or username
 - TOTP multi-factor (RFC 6238) with QR enrolment and single-use recovery codes
 - RS256 access tokens (15 min) with roles and permissions as claims; JWKS endpoint
 - Opaque refresh tokens: SHA-256 hashed at rest, rotated on every use, with reuse

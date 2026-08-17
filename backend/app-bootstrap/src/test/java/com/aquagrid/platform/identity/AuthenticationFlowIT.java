@@ -50,7 +50,6 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
     private static final String PASSWORD = "Trivandrum#Water47";
     private static final String EMAIL = "j.mathew@kwa.test";
     private static final String USERNAME = "j.mathew";
-    private static final String ORG_CODE = "SYSTEM";
 
     @Autowired
     private MockMvc mockMvc;
@@ -302,8 +301,8 @@ class AuthenticationFlowIT extends AbstractIntegrationTest {
         return mockMvc.perform(post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"identifier":"%s","password":"%s","organizationCode":"%s"}"""
-                        .formatted(identifier, password, ORG_CODE)));
+                        {"identifier":"%s","password":"%s"}"""
+                        .formatted(identifier, password)));
     }
 
     private org.springframework.test.web.servlet.ResultActions challenge(String mfaToken,

@@ -22,14 +22,13 @@ import { toProblem } from '@/lib/api/problem';
 import type { ProblemDetail } from '@/lib/api/problem';
 
 const schema = z.object({
-  identifier: z.string().trim().min(1, 'Enter your username'),
-  password: z.string().min(1, 'Enter your password'),
+  identifier: z.string().trim().min(1, 'Enter your username or email'),
   /*
    * No pattern or length rule on the password here. Enforcing the strength policy at
    * sign-in would tell an attacker what the policy is and would lock out any user whose
    * password predates a policy change. Policy applies when a password is *set*.
    */
-  organizationCode: z.string().trim().min(1, 'Enter your organisation code'),
+  password: z.string().min(1, 'Enter your password'),
 });
 
 type LoginFormValues = z.infer<typeof schema>;
@@ -53,7 +52,7 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { identifier: '', password: '', organizationCode: '' },
+    defaultValues: { identifier: '', password: '' },
     mode: 'onBlur',
   });
 
@@ -79,7 +78,6 @@ export default function LoginPage() {
       authApi.login({
         identifier: values.identifier.trim(),
         password: values.password,
-        organizationCode: values.organizationCode.trim(),
       }),
     onSuccess: (response) => {
       setProblem(null);
@@ -139,24 +137,12 @@ export default function LoginPage() {
 
           <TextField
             {...register('identifier')}
-            label="Username"
+            label="Username or email"
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
             error={Boolean(errors.identifier)}
             helperText={errors.identifier?.message}
-            fullWidth
-            required
-          />
-
-          <TextField
-            {...register('organizationCode')}
-            label="Organisation code"
-            placeholder="KWA-TVM"
-            autoCapitalize="characters"
-            spellCheck={false}
-            error={Boolean(errors.organizationCode)}
-            helperText={errors.organizationCode?.message}
             fullWidth
             required
           />

@@ -90,7 +90,6 @@ public class AuthController {
         AuthenticationResult result = authenticationService.login(AuthCommands.Login.builder()
                 .identifier(request.identifier())
                 .password(request.password())
-                .organizationCode(request.organizationCode())
                 .deviceLabel(resolveDeviceLabel(request.deviceLabel(), httpRequest))
                 .clientIp(clientIpResolver.resolve(httpRequest))
                 .userAgent(httpRequest.getHeader(HttpHeaders.USER_AGENT))

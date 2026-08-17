@@ -35,6 +35,7 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.Clock;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -125,7 +126,7 @@ public class AuthenticationService {
         String identifier = normalise(command.identifier());
         enforceLoginRateLimits(identifier, command);
 
-        Optional<User> maybeUser = resolveUser(identifier, command.organizationCode());
+        Optional<User> maybeUser = resolveUser(identifier);
         if (maybeUser.isEmpty()) {
             // Constant-work path: verify against a dummy hash so an unknown account costs the same
             // as a wrong password.
@@ -336,15 +337,16 @@ public class AuthenticationService {
                 .build();
     }
 
-    private Optional<User> resolveUser(String identifier, String organizationCode) {
-        // Login is by username, and username is unique only within a tenant, so the organisation
-        // code is mandatory. Without it there is nothing to disambiguate the identifier against, so
-        // no account is resolved and the caller falls onto the same constant-work "unknown account"
-        // path as a wrong username.
-        if (!StringUtils.hasText(organizationCode)) {
-            return Optional.empty();
+    private Optional<User> resolveUser(String identifier) {
+        Optional<User> byEmail = userRepository.findByEmailIgnoreCase(identifier);
+        if (byEmail.isPresent()) {
+            return byEmail;
         }
-        return userRepository.findByUsernameAndOrganizationCode(identifier, organizationCode.trim());
+        // Email is globally unique but username is unique only within a tenant (uq_users_org_username),
+        // so with no organisation code to disambiguate, more than one match is unresolvable — it falls
+        // onto the same constant-work "unknown account" path as a wrong username.
+        List<User> byUsername = userRepository.findAllByUsernameIgnoreCase(identifier);
+        return byUsername.size() == 1 ? Optional.of(byUsername.get(0)) : Optional.empty();
     }
 
     private void enforceLoginRateLimits(String identifier, AuthCommands.Login command) {
@@ -482,7 +484,7 @@ public class AuthenticationService {
     private BusinessException invalidCredentials() {
         // One message for every credential failure mode. The specific reason is in login_attempts.
         return new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS,
-                "The username, organisation code or password you entered is not correct.");
+                "The username, email or password you entered is not correct.");
     }
 
     private BusinessException rateLimited(RateLimitDecision decision) {
