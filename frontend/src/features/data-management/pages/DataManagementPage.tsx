@@ -511,6 +511,10 @@ function AttributeRow({
 }) {
   const locked = lockReason(attribute);
   const isTypeTable = attribute.storage === 'TYPE_TABLE';
+  // A TYPE_TABLE field whose value a user may set (e.g. a pipe's Diameter) still has an editable
+  // catalogue definition — display name, description, sample, the editable/visible flags. Only a
+  // computed one (e.g. Length (m), derived from the geometry) has nothing here worth changing.
+  const editLocked = isTypeTable && !attribute.editable;
 
   const cells: Record<string, React.ReactNode> = {
     fieldName: (
@@ -581,12 +585,12 @@ function AttributeRow({
         </Tooltip>
         {canManage ? (
           <>
-            <Tooltip title={isTypeTable ? (locked ?? '') : 'Edit'}>
+            <Tooltip title={editLocked ? (locked ?? '') : 'Edit'}>
               <span>
                 <IconButton
                   size="small"
                   onClick={onEdit}
-                  disabled={isTypeTable}
+                  disabled={editLocked}
                   aria-label={`Edit ${attribute.fieldName}`}
                 >
                   <EditIcon fontSize="small" />

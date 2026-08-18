@@ -238,7 +238,7 @@ export function AttributeFormDialog({
     Boolean(normalisedName) &&
     !nameError &&
     Boolean(form.dataType) &&
-    !(editing?.storage === 'TYPE_TABLE');
+    !(editing?.storage === 'TYPE_TABLE' && !editing?.editable);
 
   return (
     <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="md" fullWidth>
