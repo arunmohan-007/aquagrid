@@ -42,6 +42,9 @@ export function describeMapError(message: string): string {
         ? `Map layer "${layer}" does not exist on the server.`
         : `Map layer not found (HTTP ${status}).`;
     }
+    if (status === 429) {
+      return 'Map data requests are being rate-limited — try panning or zooming again in a moment.';
+    }
     // 500 lands here from a genuine backend fault *and* from the dev proxy failing to connect.
     return `Cannot reach the AquaGrid API (HTTP ${status}) — check the backend is running on port 8088.`;
   }
