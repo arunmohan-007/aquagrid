@@ -26,6 +26,9 @@ public record AssetDto(
         UUID id,
         String assetCode,
         String assetType,
+        @Schema(description = "The registry layer this asset belongs to, or null when it predates "
+                + "Layer Management and falls back to its asset type's default layer")
+        UUID layerId,
         String name,
         String status,
         LocalDate installDate,
@@ -51,6 +54,7 @@ public record AssetDto(
                 .id(asset.getId())
                 .assetCode(asset.getAssetCode())
                 .assetType(asset.getAssetType().name())
+                .layerId(asset.getLayerId())
                 .name(asset.getName())
                 .status(asset.getStatus().name())
                 .installDate(asset.getInstallDate())
