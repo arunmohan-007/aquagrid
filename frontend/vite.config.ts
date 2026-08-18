@@ -1,9 +1,35 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
+import fs from 'node:fs';
+
+/*
+ * MapLibre's worker bundle (`maplibre-gl-worker.mjs`, pulled in below via `?url`) contains its
+ * own hardcoded `import ... from "./maplibre-gl-shared.mjs"` — a literal, unhashed relative path
+ * baked into the file, resolved by the browser against the worker's own script URL at runtime.
+ * The `?url` import copies only the worker file itself; Rollup never opens it to see that import,
+ * so nothing else in the build provides that sibling. Without it the worker 404s on load, tiles
+ * are fetched but never decoded, and every vector layer stays invisible while the raster base map
+ * (needs no worker) renders normally — the failure this plugin exists to close off.
+ */
+function maplibreWorkerSharedChunk(): Plugin {
+  return {
+    name: 'maplibre-worker-shared-chunk',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'assets/maplibre-gl-shared.mjs',
+        source: fs.readFileSync(
+          path.resolve(__dirname, 'node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs'),
+          'utf-8',
+        ),
+      });
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), maplibreWorkerSharedChunk()],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
