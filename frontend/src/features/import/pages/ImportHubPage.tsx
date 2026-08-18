@@ -36,7 +36,7 @@ import PointIcon from '@mui/icons-material/PlaceOutlined';
 import FacilityIcon from '@mui/icons-material/DomainOutlined';
 import BoundaryIcon from '@mui/icons-material/HexagonOutlined';
 import FileIcon from '@mui/icons-material/InsertDriveFileOutlined';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CATEGORIES, FORMATS } from '../catalogue';
 import type { CategoryDef, DataTypeDef, ImportFormat } from '../catalogue';
 import {
@@ -47,7 +47,6 @@ import {
   type ImportRunSummary,
   type TargetField,
 } from '../importApi';
-import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import { missingProjection, prepareUpload, type PreparedUpload } from '../shapefile';
 import { problemMessage } from '@/lib/api/problem';
 
@@ -731,7 +730,6 @@ const HISTORY_PAGE_SIZE = 10;
 function ImportHistoryPanel() {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<ImportRunSummary | null>(null);
-  const [deleting, setDeleting] = useState<ImportRunSummary | null>(null);
 
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['import', 'history', page],
@@ -816,23 +814,7 @@ function ImportHistoryPanel() {
                   <TableCell align="right">{run.skipped}</TableCell>
                   <TableCell align="right">{run.failed}</TableCell>
                   <TableCell align="right">
-                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                      <Button size="small" onClick={() => setSelected(run)}>Details</Button>
-                      {run.dataDeletedAt ? (
-                        <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', pr: 0.5 }}>
-                          Data deleted
-                        </Typography>
-                      ) : run.imported > 0 && run.state !== 'RUNNING' ? (
-                        <IconButton
-                          size="small"
-                          color="error"
-                          aria-label="Delete imported data"
-                          onClick={() => setDeleting(run)}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      ) : null}
-                    </Stack>
+                    <Button size="small" onClick={() => setSelected(run)}>Details</Button>
                   </TableCell>
                 </TableRow>
               ))}
@@ -842,34 +824,21 @@ function ImportHistoryPanel() {
       ) : null}
 
       {selected ? <RunDetailDialog run={selected} onClose={() => setSelected(null)} /> : null}
-      {deleting ? (
-        <DeleteRunDataDialog
-          run={deleting}
-          onClose={() => setDeleting(null)}
-          onDeleted={() => setDeleting(null)}
-        />
-      ) : null}
     </Card>
   );
 }
 
 function RunDetailDialog({
-  run: initialRun,
+  run,
   onClose,
 }: {
   run: ImportRunSummary;
   onClose: () => void;
 }) {
-  // Local copy so a successful delete can update the deleted-state chip in place, without waiting
-  // on the history list's own refetch (still triggered, for the row behind this dialog).
-  const [run, setRun] = useState(initialRun);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const { data, isLoading, error } = useQuery({
     queryKey: ['import', 'history', 'detail', run.id],
     queryFn: () => importApi.historyDetail(run.id),
   });
-
-  const canDelete = run.imported > 0 && run.state !== 'RUNNING' && !run.dataDeletedAt;
 
   return (
     <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
@@ -898,13 +867,6 @@ function RunDetailDialog({
           {run.errorMessage ? (
             <Alert severity="error" variant="outlined">{run.errorMessage}</Alert>
           ) : null}
-          {run.dataDeletedAt ? (
-            <Alert severity="info" variant="outlined">
-              {run.deletedRowCount} asset{run.deletedRowCount === 1 ? '' : 's'} deleted{' '}
-              {new Date(run.dataDeletedAt).toLocaleString()}
-              {run.deletedRowEstimated ? ' (best-effort match — this run predates exact tracking)' : ''}.
-            </Alert>
-          ) : null}
           {isLoading ? (
             <Stack direction="row" spacing={1} alignItems="center">
               <CircularProgress size={16} />
@@ -925,116 +887,6 @@ function RunDetailDialog({
           ) : null}
         </Stack>
       </DialogContent>
-      {canDelete ? (
-        <DialogActions sx={{ px: 3, py: 1.5 }}>
-          <Button
-            size="small"
-            color="error"
-            startIcon={<DeleteIcon fontSize="small" />}
-            onClick={() => setConfirmingDelete(true)}
-          >
-            Delete imported data
-          </Button>
-        </DialogActions>
-      ) : null}
-      {confirmingDelete ? (
-        <DeleteRunDataDialog
-          run={run}
-          onClose={() => setConfirmingDelete(false)}
-          onDeleted={(preview) => {
-            setRun((r) => ({
-              ...r,
-              dataDeletedAt: new Date().toISOString(),
-              deletedRowCount: preview.count,
-              deletedRowEstimated: preview.estimated,
-            }));
-            setConfirmingDelete(false);
-          }}
-        />
-      ) : null}
-    </Dialog>
-  );
-}
-
-/**
- * Confirms and performs the delete, stacked on top of {@link RunDetailDialog}.
- *
- * The preview is fetched fresh here rather than reused from the run summary: it costs one cheap
- * count query and guarantees the number on the confirm button is current at the moment of the
- * decision, not whatever the history list happened to show when it last loaded.
- */
-function DeleteRunDataDialog({
-  run,
-  onClose,
-  onDeleted,
-}: {
-  run: ImportRunSummary;
-  onClose: () => void;
-  onDeleted: (preview: { count: number; estimated: boolean }) => void;
-}) {
-  const qc = useQueryClient();
-  const { data: preview, isLoading, error } = useQuery({
-    queryKey: ['import', 'history', 'delete-preview', run.id],
-    queryFn: () => importApi.deletePreview(run.id),
-  });
-  const [confirmError, setConfirmError] = useState<string | null>(null);
-
-  const deleteMutation = useMutation({
-    mutationFn: () => importApi.deleteData(run.id),
-    onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: ['import', 'history'] });
-      onDeleted(result);
-    },
-    onError: (cause) => setConfirmError(problemMessage(cause)),
-  });
-
-  const count = preview?.count ?? 0;
-
-  return (
-    <Dialog open onClose={deleteMutation.isPending ? undefined : onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Delete this run's imported data?</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2}>
-          {confirmError ? <Alert severity="error" variant="outlined">{confirmError}</Alert> : null}
-          {isLoading ? (
-            <Stack direction="row" spacing={1} alignItems="center">
-              <CircularProgress size={16} />
-              <Typography variant="body2" color="text.secondary">Counting affected assets…</Typography>
-            </Stack>
-          ) : error ? (
-            <Alert severity="error" variant="outlined">
-              Could not count affected assets. {problemMessage(error)}
-            </Alert>
-          ) : (
-            <Alert severity="warning" variant="outlined">
-              <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                This permanently deletes {count} asset{count === 1 ? '' : 's'}.
-              </Typography>
-              <Typography variant="body2">
-                Only the assets this run <em>created</em> are removed — any it merely updated are left
-                untouched. This cannot be undone.
-                {preview?.estimated
-                  ? ' This run predates exact per-asset tracking, so the count above is a best-effort '
-                    + 'match on asset type, layer, who ran it and when — not a certainty.'
-                  : ''}
-              </Typography>
-            </Alert>
-          )}
-        </Stack>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 2 }}>
-        <Button onClick={onClose} disabled={deleteMutation.isPending}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          color="error"
-          onClick={() => deleteMutation.mutate()}
-          disabled={isLoading || Boolean(error) || count === 0 || deleteMutation.isPending}
-        >
-          {deleteMutation.isPending ? 'Deleting…' : `Delete ${count} asset${count === 1 ? '' : 's'}`}
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 }

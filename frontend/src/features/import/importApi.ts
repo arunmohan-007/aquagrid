@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, http } from '@/lib/api/httpClient';
+import { apiGet, http } from '@/lib/api/httpClient';
 import type { PageResponse } from '@/features/users/types';
 import type { GeometryKind } from './catalogue';
 
@@ -61,12 +61,6 @@ export interface ImportRunSummary {
   startedAt: string;
   finishedAt: string | null;
   errorMessage: string | null;
-  /** When this run's imported assets were deleted from the history, or null if never. */
-  dataDeletedAt: string | null;
-  deletedRowCount: number | null;
-  /** True when {@link deletedRowCount} came from a best-effort match rather than an exact tag —
-   *  see {@link DeletePreview}. */
-  deletedRowEstimated: boolean | null;
 }
 
 export interface ImportRunDetail {
@@ -87,18 +81,6 @@ export interface ImportPreview {
   toCreate: number;
   toReplace: number;
   duplicatesSkipped: number;
-}
-
-/**
- * How many assets deleting a run's data would remove (or removed).
- *
- * `estimated` is true when the run predates exact per-asset tracking and the count comes from a
- * best-effort match on tenant, asset type, layer, actor and the run's own time window instead of
- * the asset's own tag — worth surfacing to the operator before they confirm.
- */
-export interface DeletePreview {
-  count: number;
-  estimated: boolean;
 }
 
 /**
@@ -168,12 +150,4 @@ export const importApi = {
 
   historyDetail: (id: string) =>
     apiGet<ImportRunDetail>(`/assets/bulk-import/history/${id}`),
-
-  /** Counts what a delete would remove, without removing anything. */
-  deletePreview: (id: string) =>
-    apiGet<DeletePreview>(`/assets/bulk-import/history/${id}/delete-preview`),
-
-  /** Deletes the assets this run created. Irreversible — the caller must confirm first. */
-  deleteData: (id: string) =>
-    apiDelete<DeletePreview>(`/assets/bulk-import/history/${id}/data`),
 };
