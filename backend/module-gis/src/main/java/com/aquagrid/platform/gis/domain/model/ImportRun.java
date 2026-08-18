@@ -79,4 +79,18 @@ public class ImportRun extends TenantAwareEntity {
 
     @Column(name = "finished_at")
     private Instant finishedAt;
+
+    @Column(name = "data_deleted_at")
+    private Instant dataDeletedAt;
+
+    @Column(name = "data_deleted_by")
+    private UUID dataDeletedBy;
+
+    @Column(name = "deleted_row_count")
+    private Integer deletedRowCount;
+
+    /** Whether {@link #deletedRowCount} came from the exact {@code import_run_id} match or the
+     *  best-effort fallback for a run predating that column — see V1338. */
+    @Column(name = "deleted_row_estimated")
+    private Boolean deletedRowEstimated;
 }

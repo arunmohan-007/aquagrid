@@ -238,6 +238,66 @@ public interface AssetRepository extends JpaRepository<Asset, UUID> {
 
     boolean existsByOrganizationIdAndAssetCode(UUID organizationId, String assetCode);
 
+    // ---- Import-run data delete (V1338) ----------------------------------------------------------
+
+    /** Assets a run created, by the exact tag every run stamps on its inserts since V1338. */
+    @Query(value = """
+            SELECT count(*) FROM gis.assets a
+            WHERE a.organization_id = :organizationId AND a.import_run_id = :importRunId
+            """, nativeQuery = true)
+    long countByImportRun(@Param("organizationId") UUID organizationId,
+                          @Param("importRunId") UUID importRunId);
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            DELETE FROM gis.assets a
+            WHERE a.organization_id = :organizationId AND a.import_run_id = :importRunId
+            """, nativeQuery = true)
+    int deleteByImportRun(@Param("organizationId") UUID organizationId,
+                          @Param("importRunId") UUID importRunId);
+
+    /**
+     * Best-effort match for a run predating {@code import_run_id} (V1336 runs, before V1338):
+     * tenant, asset type, the same layer the run wrote to (or no layer, matching how the run itself
+     * left {@code layer_id} null), created within the run's own start/finish window. Restricted to
+     * rows with no exact tag, so a heuristic can never re-claim an asset another, later run already
+     * owns precisely.
+     *
+     * <p>Deliberately not filtered on the actor: {@code created_by} is populated from Spring
+     * Security's context, which does not propagate onto {@code runImport}'s {@code @Async} thread —
+     * every asset a bulk import creates has always carried a null {@code created_by}, so requiring
+     * it to equal the run's actor would silently match zero rows for every historical run, not
+     * narrow the match.
+     */
+    @Query(value = """
+            SELECT count(*) FROM gis.assets a
+            WHERE a.organization_id = :organizationId
+              AND a.import_run_id IS NULL
+              AND a.asset_type = :assetType
+              AND (a.layer_id = :layerId OR (cast(:layerId as uuid) IS NULL AND a.layer_id IS NULL))
+              AND a.created_at BETWEEN :from AND :to
+            """, nativeQuery = true)
+    long countByImportWindow(@Param("organizationId") UUID organizationId,
+                             @Param("assetType") String assetType,
+                             @Param("layerId") UUID layerId,
+                             @Param("from") java.time.Instant from,
+                             @Param("to") java.time.Instant to);
+
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            DELETE FROM gis.assets a
+            WHERE a.organization_id = :organizationId
+              AND a.import_run_id IS NULL
+              AND a.asset_type = :assetType
+              AND (a.layer_id = :layerId OR (cast(:layerId as uuid) IS NULL AND a.layer_id IS NULL))
+              AND a.created_at BETWEEN :from AND :to
+            """, nativeQuery = true)
+    int deleteByImportWindow(@Param("organizationId") UUID organizationId,
+                             @Param("assetType") String assetType,
+                             @Param("layerId") UUID layerId,
+                             @Param("from") java.time.Instant from,
+                             @Param("to") java.time.Instant to);
+
     /**
      * The asset an import row's {@code asset_code} column already belongs to, if any.
      *
@@ -267,25 +327,6 @@ public interface AssetRepository extends JpaRepository<Asset, UUID> {
                                    @Param("assetType") String assetType,
                                    @Param("key") String key,
                                    @Param("value") String value);
-
-    /**
-     * The asset that already carries this value under an attribute-bag key, if any.
-     *
-     * <p>The read counterpart of {@link #existsByAttributeValue}, used by the bulk importer to
-     * find the row to update when a {@code unique} field matches something already stored, instead
-     * of only being able to say that a collision exists.
-     */
-    @Query(value = """
-            SELECT * FROM gis.assets a
-            WHERE a.organization_id = :organizationId
-              AND a.asset_type = :assetType
-              AND a.attributes ->> cast(:key as text) = cast(:value as text)
-            LIMIT 1
-            """, nativeQuery = true)
-    java.util.Optional<Asset> findFirstByAttributeValue(@Param("organizationId") UUID organizationId,
-                                                        @Param("assetType") String assetType,
-                                                        @Param("key") String key,
-                                                        @Param("value") String value);
 
     /**
      * Moves every stored value of one attribute-bag key to a new key.

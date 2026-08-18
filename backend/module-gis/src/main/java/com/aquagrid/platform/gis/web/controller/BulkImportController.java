@@ -3,6 +3,7 @@ package com.aquagrid.platform.gis.web.controller;
 import com.aquagrid.platform.common.error.BusinessException;
 import com.aquagrid.platform.common.error.ErrorCode;
 import com.aquagrid.platform.common.web.ApiPaths;
+import com.aquagrid.platform.common.web.ClientIpResolver;
 import com.aquagrid.platform.common.web.PageResponse;
 import com.aquagrid.platform.gis.api.AttributeDefinition;
 import com.aquagrid.platform.gis.api.LayerMetadataApi;
@@ -27,6 +28,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +36,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -66,6 +69,7 @@ public class BulkImportController {
     private final LayerMetadataApi metadataApi;
     private final LayerManagementService layerService;
     private final ObjectMapper objectMapper;
+    private final ClientIpResolver clientIpResolver;
 
     @PostMapping(value = "/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAuthority('" + Permissions.ASSET_CREATE + "')")
@@ -171,6 +175,27 @@ public class BulkImportController {
                         request.sortOrder(),
                         request.claimExistingFeatures() == null || request.claimExistingFeatures()));
         return LayerDtos.LayerResponse.from(layerService.get(principal.organizationId(), created.getId()));
+    }
+
+    @PostMapping(value = "/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('" + Permissions.ASSET_CREATE + "')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Preview what an import would do before running it",
+            description = "Phase 2.5. Resolves every row against the layer's assets exactly as the real "
+                    + "import would — new asset vs. replacing an existing one vs. a duplicate within this "
+                    + "file — without writing anything, so the wizard can show the operator what they are "
+                    + "about to commit to and let them back out before anything is saved.")
+    public BulkImportService.ImportPreview preview(@RequestParam("file") MultipartFile file,
+                                                    @RequestParam("mapping") String mapping,
+                                                    @RequestParam(defaultValue = "METER") String defaultType,
+                                                    @RequestParam(required = false) UUID layerId)
+            throws IOException {
+        var principal = SecurityUtils.requirePrincipal();
+        Layer layer = resolveTargetLayer(principal.organizationId(), layerId, defaultType);
+        AssetType type = layer != null ? layer.getAssetType() : parseAssetType(defaultType);
+
+        return bulkImportService.preview(principal.organizationId(), file.getContentType(), file.getBytes(),
+                type, parseMapping(mapping));
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -284,5 +309,30 @@ public class BulkImportController {
                     + "is fully accounted for by the summary's imported count.")
     public BulkImportService.ImportRunDetail historyDetail(@PathVariable UUID id) {
         return bulkImportService.historyDetail(SecurityUtils.requirePrincipal().organizationId(), id);
+    }
+
+    @GetMapping("/history/{id}/delete-preview")
+    @PreAuthorize("hasAuthority('" + Permissions.ASSET_DELETE + "')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Preview how many assets deleting this run's data would remove",
+            description = "Counts without deleting anything, so the confirmation dialog can show the "
+                    + "operator what they are about to remove. `estimated` is true when the run predates "
+                    + "exact per-asset tracking (V1338) and the count comes from a best-effort match on "
+                    + "tenant, asset type, layer, actor and the run's own time window instead.")
+    public BulkImportService.DeletePreview deletePreview(@PathVariable UUID id) {
+        return bulkImportService.deletePreview(SecurityUtils.requirePrincipal().organizationId(), id);
+    }
+
+    @DeleteMapping("/history/{id}/data")
+    @PreAuthorize("hasAuthority('" + Permissions.ASSET_DELETE + "')")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Delete the assets this import run created",
+            description = "Removes only the assets this run newly created — never one it merely replaced "
+                    + "(updated), so this can never destroy data that predates the run. Refused if this "
+                    + "run's data was already deleted, or if the run is still in progress. Irreversible.")
+    public BulkImportService.DeletePreview deleteData(@PathVariable UUID id, HttpServletRequest httpRequest) {
+        var principal = SecurityUtils.requirePrincipal();
+        return bulkImportService.deleteImportedData(principal.organizationId(), id, principal.userId(),
+                principal.username(), clientIpResolver.resolve(httpRequest));
     }
 }

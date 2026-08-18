@@ -1,4 +1,4 @@
-import { apiGet, http } from '@/lib/api/httpClient';
+import { apiDelete, apiGet, http } from '@/lib/api/httpClient';
 import type { PageResponse } from '@/features/users/types';
 import type { GeometryKind } from './catalogue';
 
@@ -61,11 +61,44 @@ export interface ImportRunSummary {
   startedAt: string;
   finishedAt: string | null;
   errorMessage: string | null;
+  /** When this run's imported assets were deleted from the history, or null if never. */
+  dataDeletedAt: string | null;
+  deletedRowCount: number | null;
+  /** True when {@link deletedRowCount} came from a best-effort match rather than an exact tag —
+   *  see {@link DeletePreview}. */
+  deletedRowEstimated: boolean | null;
 }
 
 export interface ImportRunDetail {
   summary: ImportRunSummary;
   rows: ImportRowDetail[];
+}
+
+/**
+ * What committing a file with a given mapping would do, before anything is written.
+ *
+ * `duplicatesSkipped` covers rows that repeat an asset code or a duplicate-check field combination
+ * already claimed earlier in the same file — the real import drops them the same way. Field-level
+ * validation is not previewed; a row that would fail mandatory or type checks still counts toward
+ * `toCreate` or `toReplace` here and only shows up as a failure once the import actually runs.
+ */
+export interface ImportPreview {
+  totalRows: number;
+  toCreate: number;
+  toReplace: number;
+  duplicatesSkipped: number;
+}
+
+/**
+ * How many assets deleting a run's data would remove (or removed).
+ *
+ * `estimated` is true when the run predates exact per-asset tracking and the count comes from a
+ * best-effort match on tenant, asset type, layer, actor and the run's own time window instead of
+ * the asset's own tag — worth surfacing to the operator before they confirm.
+ */
+export interface DeletePreview {
+  count: number;
+  estimated: boolean;
 }
 
 /**
@@ -100,6 +133,19 @@ export const importApi = {
       params: { assetType, geometry },
     }),
 
+  /** Resolves every row against existing assets without writing anything — for the pre-import confirm step. */
+  preview: (file: File | Blob, filename: string, mapping: Record<string, string>, defaultType: string) => {
+    const form = new FormData();
+    form.append('file', file, filename);
+    form.append('mapping', JSON.stringify(mapping));
+    form.append('defaultType', defaultType);
+    return http
+      .post<ImportPreview>('/assets/bulk-import/preview', form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      .then((r) => r.data);
+  },
+
   start: (file: File | Blob, filename: string, mapping: Record<string, string>, defaultType: string) => {
     const form = new FormData();
     form.append('file', file, filename);
@@ -122,4 +168,12 @@ export const importApi = {
 
   historyDetail: (id: string) =>
     apiGet<ImportRunDetail>(`/assets/bulk-import/history/${id}`),
+
+  /** Counts what a delete would remove, without removing anything. */
+  deletePreview: (id: string) =>
+    apiGet<DeletePreview>(`/assets/bulk-import/history/${id}/delete-preview`),
+
+  /** Deletes the assets this run created. Irreversible — the caller must confirm first. */
+  deleteData: (id: string) =>
+    apiDelete<DeletePreview>(`/assets/bulk-import/history/${id}/data`),
 };

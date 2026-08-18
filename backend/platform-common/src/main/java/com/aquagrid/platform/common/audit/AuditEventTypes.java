@@ -68,6 +68,7 @@ public final class AuditEventTypes {
     public static final String ASSET_EXPORT_GENERATED = "ASSET_EXPORT_GENERATED";
     public static final String IMPORT_RUN_COMPLETED = "IMPORT_RUN_COMPLETED";
     public static final String IMPORT_RUN_FAILED = "IMPORT_RUN_FAILED";
+    public static final String IMPORT_RUN_DATA_DELETED = "IMPORT_RUN_DATA_DELETED";
 
     /*
      * Layer Management and Layer Style Management.

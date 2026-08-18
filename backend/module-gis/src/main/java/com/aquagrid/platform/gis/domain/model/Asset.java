@@ -61,6 +61,16 @@ public class Asset extends AuditableEntity {
     @Column(name = "layer_id")
     private UUID layerId;
 
+    /**
+     * The bulk import run that created this asset (V1338), or null.
+     *
+     * <p>Set only when a row is a brand-new insert — never when an import replaces (updates) an
+     * asset that already existed, so deleting a run's data can never remove something that
+     * predates it. Null for every asset created by hand or imported before this column existed.
+     */
+    @Column(name = "import_run_id")
+    private UUID importRunId;
+
     @Column(name = "name", nullable = false, length = 200)
     private String name;
 

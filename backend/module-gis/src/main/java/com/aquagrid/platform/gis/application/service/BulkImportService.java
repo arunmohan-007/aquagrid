@@ -18,6 +18,7 @@ import com.aquagrid.platform.gis.infrastructure.persistence.AssetRepository;
 import com.aquagrid.platform.gis.infrastructure.persistence.ImportRunRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -67,11 +68,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * what it must satisfy. An attribute created this morning is mappable this afternoon, and nothing
  * in this class knows its name.
  *
- * <p>A row whose {@code asset_code} or a field marked "Consider for duplicate check" in Data
- * Management matches an asset already on file updates that asset instead of colliding with it —
- * see {@link #resolveTarget}. A row whose matching value repeats within the same file is dropped
- * as a duplicate of the row that already claimed it. This turns a re-import of a previously
- * loaded file from a wall of "already exists" failures into the update it is meant to be.
+ * <p>A row whose {@code asset_code} matches an asset already on file updates that asset instead of
+ * colliding with it. So does a row that supplies a value for every field marked "Consider for
+ * duplicate check" in Data Management, when that combination already matches an asset — one
+ * flagged field alone is that field's value; more than one flagged field requires all of them to
+ * agree, so two meters that happen to share one attribute are not merged on that basis alone. See
+ * {@link #resolveTarget}. A row whose matching value repeats within the same file is dropped as a
+ * duplicate of the row that already claimed it. This turns a re-import of a previously loaded file
+ * from a wall of "already exists" failures into the update it is meant to be.
  *
  * <p>Live job state is in-process ({@code ConcurrentHashMap}) for the duration of the run — correct
  * for v1 single-node, a multi-node deployment moves it to shared storage. Once a run finishes it is
@@ -91,6 +95,7 @@ public class BulkImportService {
     private final ImportRunRepository importRunRepository;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
+    private final EntityManager entityManager;
 
     private final Map<UUID, JobStatus> jobs = new ConcurrentHashMap<>();
 
@@ -170,7 +175,94 @@ public class BulkImportService {
         }
     }
 
-    // ---- Phase 2: import with the user's mapping ---------------------------------------------
+    // ---- Phase 2: preview, then import with the user's mapping --------------------------------
+
+    /**
+     * Resolves every row against the layer's assets exactly as {@link #runImport} would — new vs.
+     * replace vs. duplicate-skip — without writing anything, so the wizard can show the operator
+     * what they are about to commit to and let them back out before anything is saved.
+     *
+     * <p>Counts only what row identity resolution already knows for free: matching is a handful of
+     * indexed reads, so previewing a large file costs little beyond parsing it. Field-level
+     * validation (a missing mandatory value, a malformed number) is not run here — it stays a
+     * property of the commit, the same way {@code toReplace} here can drift from the real run's
+     * {@code replaced} count if another operator writes to the same layer in between.
+     */
+    public ImportPreview preview(UUID organizationId, String contentType, byte[] payload, AssetType defaultType,
+                                 Map<String, String> mapping) {
+        ResolvedMapping resolved = resolveMapping(organizationId, defaultType, mapping);
+        boolean isJson = contentType != null && contentType.contains("json");
+        return isJson ? previewGeoJson(organizationId, defaultType, payload, resolved)
+                      : previewCsv(organizationId, defaultType, payload, resolved);
+    }
+
+    private ImportPreview previewGeoJson(UUID organizationId, AssetType defaultType, byte[] payload,
+                                         ResolvedMapping mapping) {
+        int total = 0;
+        int toCreate = 0;
+        int toReplace = 0;
+        int duplicatesSkipped = 0;
+        try {
+            JsonNode root = objectMapper.readTree(payload);
+            JsonNode features = root.path("features");
+            for (JsonNode feature : features) {
+                total++;
+                JsonNode props = feature.path("properties");
+                Map<String, String> values = new HashMap<>();
+                props.fields().forEachRemaining(e -> values.put(e.getKey(), e.getValue().asText("")));
+
+                RowResolution resolution = resolveTarget(organizationId, values, defaultType, mapping);
+                if (resolution.matched() == null) {
+                    duplicatesSkipped++;
+                } else if (resolution.matched().isNew()) {
+                    toCreate++;
+                } else {
+                    toReplace++;
+                }
+            }
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "Invalid GeoJSON: " + e.getMessage());
+        }
+        return new ImportPreview(total, toCreate, toReplace, duplicatesSkipped);
+    }
+
+    private ImportPreview previewCsv(UUID organizationId, AssetType defaultType, byte[] payload,
+                                     ResolvedMapping mapping) {
+        int total = 0;
+        int toCreate = 0;
+        int toReplace = 0;
+        int duplicatesSkipped = 0;
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new java.io.ByteArrayInputStream(payload), StandardCharsets.UTF_8))) {
+            String header = reader.readLine();
+            if (header == null) {
+                throw new BusinessException(ErrorCode.VALIDATION_FAILED, "CSV is empty.");
+            }
+            String[] cols = header.split(",", -1);
+
+            String line;
+            while ((line = reader.readLine()) != null) {
+                total++;
+                String[] parts = line.split(",", -1);
+                Map<String, String> values = new HashMap<>();
+                for (int i = 0; i < cols.length && i < parts.length; i++) {
+                    values.put(cols[i].trim(), parts[i]);
+                }
+
+                RowResolution resolution = resolveTarget(organizationId, values, defaultType, mapping);
+                if (resolution.matched() == null) {
+                    duplicatesSkipped++;
+                } else if (resolution.matched().isNew()) {
+                    toCreate++;
+                } else {
+                    toReplace++;
+                }
+            }
+        } catch (Exception e) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "Invalid CSV: " + e.getMessage());
+        }
+        return new ImportPreview(total, toCreate, toReplace, duplicatesSkipped);
+    }
 
     /**
      * Runs the import asynchronously, using the supplied column mapping.
@@ -201,9 +293,9 @@ public class BulkImportService {
         try {
             ResolvedMapping resolved = resolveMapping(organizationId, defaultType, mapping);
             if (contentType.contains("json")) {
-                importGeoJson(organizationId, defaultType, layerId, payload, status, resolved);
+                importGeoJson(organizationId, defaultType, layerId, run.getId(), payload, status, resolved);
             } else {
-                importCsv(organizationId, defaultType, layerId, payload, status, resolved);
+                importCsv(organizationId, defaultType, layerId, run.getId(), payload, status, resolved);
             }
             status.complete();
             log.info("Bulk import {} done: {} imported, {} replaced, {} skipped, {} failed",
@@ -301,7 +393,7 @@ public class BulkImportService {
         return new ResolvedMapping(byColumn, duplicateCheckAttributes, new HashSet<>());
     }
 
-    private void importGeoJson(UUID organizationId, AssetType defaultType, UUID layerId,
+    private void importGeoJson(UUID organizationId, AssetType defaultType, UUID layerId, UUID runId,
                                byte[] payload, JobStatus status, ResolvedMapping mapping) {
         try {
             JsonNode root = objectMapper.readTree(payload);
@@ -313,12 +405,12 @@ public class BulkImportService {
                     Map<String, String> values = new HashMap<>();
                     props.fields().forEachRemaining(e -> values.put(e.getKey(), e.getValue().asText("")));
 
-                    MatchedAsset target = resolveTarget(organizationId, values, defaultType, mapping);
-                    if (target == null) {
-                        status.recordSkipped(status.total,
-                                "Same asset code / duplicate-check value as an earlier row in this file.");
+                    RowResolution resolution = resolveTarget(organizationId, values, defaultType, mapping);
+                    if (resolution.matched() == null) {
+                        status.recordSkipped(status.total, resolution.skipReason());
                         continue;
                     }
+                    MatchedAsset target = resolution.matched();
 
                     Asset asset = target.asset();
                     asset.setLayerId(layerId);
@@ -337,7 +429,7 @@ public class BulkImportService {
                         asset.setGeom(GeometryCodec.fromGeoJson(objectMapper.convertValue(
                                 feature.path("geometry"), Map.class)));
                     }
-                    finishNewAsset(asset, target.isNew());
+                    finishNewAsset(asset, target.isNew(), runId);
                     assetRepository.save(asset);
                     status.recordSaved(status.total, target.isNew());
                 } catch (Exception rowError) {
@@ -349,7 +441,7 @@ public class BulkImportService {
         }
     }
 
-    private void importCsv(UUID organizationId, AssetType defaultType, UUID layerId,
+    private void importCsv(UUID organizationId, AssetType defaultType, UUID layerId, UUID runId,
                            byte[] payload, JobStatus status, ResolvedMapping mapping) {
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(new java.io.ByteArrayInputStream(payload), StandardCharsets.UTF_8))) {
@@ -369,12 +461,12 @@ public class BulkImportService {
                         values.put(cols[i].trim(), parts[i]);
                     }
 
-                    MatchedAsset target = resolveTarget(organizationId, values, defaultType, mapping);
-                    if (target == null) {
-                        status.recordSkipped(status.total,
-                                "Same asset code / duplicate-check value as an earlier row in this file.");
+                    RowResolution resolution = resolveTarget(organizationId, values, defaultType, mapping);
+                    if (resolution.matched() == null) {
+                        status.recordSkipped(status.total, resolution.skipReason());
                         continue;
                     }
+                    MatchedAsset target = resolution.matched();
 
                     Asset asset = target.asset();
                     asset.setLayerId(layerId);
@@ -391,7 +483,7 @@ public class BulkImportService {
                         throw new BusinessException(ErrorCode.VALIDATION_FAILED,
                                 "No geometry: map a longitude and a latitude column.");
                     }
-                    finishNewAsset(asset, target.isNew());
+                    finishNewAsset(asset, target.isNew(), runId);
                     assetRepository.save(asset);
                     status.recordSaved(status.total, target.isNew());
                 } catch (Exception rowError) {
@@ -404,14 +496,23 @@ public class BulkImportService {
     }
 
     /**
-     * Finds the asset this row belongs to, or reports it as a within-file duplicate.
+     * Finds the asset this row belongs to, or reports it as a within-file duplicate or conflict.
      *
-     * <p>A row matches an existing asset by {@code asset_code} first (the platform's actual
-     * identity field), then by the first attribute-bag field marked "Consider for duplicate check"
-     * in Data Management that the row carries a value for. A match means the row updates that
-     * asset — {@link AttributeBinder#bind} only ever writes the columns this file maps, so a field
-     * the file is silent on keeps whatever value the asset already had. No match means a new asset,
-     * exactly as before this method existed.
+     * <p>A row matches an existing asset by {@code asset_code} (the platform's actual identity
+     * field), and separately by the fields marked "Consider for duplicate check" in Data
+     * Management — one flagged field is that field's value alone; more than one flagged field
+     * requires the row to supply a value for <em>every</em> one of them, and all of those values
+     * together must match an existing asset. A row silent on even one flagged field is not
+     * eligible for attribute-based matching at all: a partial match would let two unrelated meters
+     * merge because they happened to agree on the one field that was filled in. A match means the
+     * row updates that asset — {@link AttributeBinder#bind} only ever writes the columns this file
+     * maps, so a field the file is silent on keeps whatever value the asset already had. No match
+     * means a new asset, exactly as before this method existed.
+     *
+     * <p>{@code asset_code} and the duplicate-check fields are independent keys. If both are
+     * present on a row and they resolve to two different existing assets, that is a data conflict
+     * — not something this method can resolve by picking one — so the row is skipped rather than
+     * merged onto either asset.
      *
      * <p>A layer with no field marked for duplicate check, and no {@code asset_code} mapped, has no
      * key to match on — every row is a new asset, same as before this method existed. That is a
@@ -422,38 +523,53 @@ public class BulkImportService {
      * it is treated as a duplicate row and the second (and any later) occurrence is skipped, so the
      * import's counts describe what happened rather than silently overwriting the first row's work
      * with the second's.
-     *
-     * @return null when this row's matching value was already claimed earlier in this file
      */
-    private MatchedAsset resolveTarget(UUID organizationId, Map<String, String> sourceValues,
-                                       AssetType defaultType, ResolvedMapping mapping) {
+    private RowResolution resolveTarget(UUID organizationId, Map<String, String> sourceValues,
+                                        AssetType defaultType, ResolvedMapping mapping) {
         String mappedAssetCode = mappedAssetCode(sourceValues, mapping);
-        DuplicateCheckValue duplicateCheckValue = mappedAssetCode == null
-                ? firstDuplicateCheckValue(sourceValues, mapping) : null;
+        Map<String, String> duplicateCheckValues = allDuplicateCheckValues(sourceValues, mapping);
 
-        String dedupeKey = mappedAssetCode != null ? "code:" + mappedAssetCode
-                : duplicateCheckValue != null
-                        ? "attr:" + duplicateCheckValue.fieldName() + ':' + duplicateCheckValue.value() : null;
-        if (dedupeKey != null && !mapping.seenKeys().add(dedupeKey)) {
-            return null;
+        String codeKey = mappedAssetCode != null ? "code:" + mappedAssetCode : null;
+        String attrsKey = duplicateCheckValues != null ? "attrs:" + canonicalKey(duplicateCheckValues) : null;
+
+        if (codeKey != null && mapping.seenKeys().contains(codeKey)) {
+            return RowResolution.skip("Same asset code as an earlier row in this file.");
+        }
+        if (attrsKey != null && mapping.seenKeys().contains(attrsKey)) {
+            return RowResolution.skip(
+                    "Same duplicate-check field values as an earlier row in this file.");
         }
 
-        Asset existing = null;
-        if (mappedAssetCode != null) {
-            existing = assetRepository.findByOrganizationIdAndAssetCode(organizationId, mappedAssetCode)
-                    .orElse(null);
-        } else if (duplicateCheckValue != null) {
-            existing = assetRepository.findFirstByAttributeValue(organizationId, defaultType.name(),
-                    duplicateCheckValue.fieldName(), duplicateCheckValue.value()).orElse(null);
+        Asset existingByCode = mappedAssetCode != null
+                ? assetRepository.findByOrganizationIdAndAssetCode(organizationId, mappedAssetCode).orElse(null)
+                : null;
+        Asset existingByAttrs = duplicateCheckValues != null
+                ? findByAllAttributeValues(organizationId, defaultType, duplicateCheckValues)
+                : null;
+
+        if (existingByCode != null && existingByAttrs != null
+                && !existingByCode.getId().equals(existingByAttrs.getId())) {
+            return RowResolution.skip("Asset code '" + mappedAssetCode + "' and the duplicate-check "
+                    + "fields point to two different existing assets ('" + existingByCode.getAssetCode()
+                    + "' and '" + existingByAttrs.getAssetCode() + "'). Fix the mismatch in the source "
+                    + "file and re-import this row.");
         }
 
+        if (codeKey != null) {
+            mapping.seenKeys().add(codeKey);
+        }
+        if (attrsKey != null) {
+            mapping.seenKeys().add(attrsKey);
+        }
+
+        Asset existing = existingByCode != null ? existingByCode : existingByAttrs;
         if (existing != null) {
-            return new MatchedAsset(existing, false);
+            return RowResolution.matched(new MatchedAsset(existing, false));
         }
         Asset created = new Asset();
         created.setOrganizationId(organizationId);
         created.setStatus(AssetStatus.IN_SERVICE);
-        return new MatchedAsset(created, true);
+        return RowResolution.matched(new MatchedAsset(created, true));
     }
 
     /** The value this row's mapped {@code asset_code} column carries, trimmed, or null. */
@@ -468,21 +584,73 @@ public class BulkImportService {
     }
 
     /**
-     * The first duplicate-check-flagged attribute this row carries a non-blank value for, or null.
+     * Every duplicate-check-flagged attribute's value from this row, keyed by field name — only
+     * when the row supplies a non-blank value for all of them. Null when no field is flagged, or
+     * the row is silent on at least one that is.
      */
-    private DuplicateCheckValue firstDuplicateCheckValue(Map<String, String> sourceValues, ResolvedMapping mapping) {
+    private Map<String, String> allDuplicateCheckValues(Map<String, String> sourceValues, ResolvedMapping mapping) {
+        if (mapping.duplicateCheckAttributes().isEmpty()) {
+            return null;
+        }
+        Map<String, String> values = new LinkedHashMap<>();
         for (AttributeDefinition attribute : mapping.duplicateCheckAttributes()) {
+            String raw = null;
             for (Map.Entry<String, AttributeDefinition> entry : mapping.byColumn().entrySet()) {
-                if (!entry.getValue().equals(attribute)) {
-                    continue;
-                }
-                String raw = sourceValues.get(entry.getKey());
-                if (raw != null && !raw.isBlank()) {
-                    return new DuplicateCheckValue(attribute.fieldName(), raw.trim());
+                if (entry.getValue().equals(attribute)) {
+                    raw = sourceValues.get(entry.getKey());
+                    break;
                 }
             }
+            if (raw == null || raw.isBlank()) {
+                return null;
+            }
+            values.put(attribute.fieldName(), raw.trim());
         }
-        return null;
+        return values;
+    }
+
+    /** A deterministic, order-independent-by-construction string for a set of field values. */
+    private String canonicalKey(Map<String, String> values) {
+        StringBuilder key = new StringBuilder();
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            key.append(entry.getKey()).append('=').append(entry.getValue()).append('|');
+        }
+        return key.toString();
+    }
+
+    /**
+     * The asset whose attribute bag carries every one of these field values, or null.
+     *
+     * <p>Built as a native query rather than repeated single-field lookups because the fields
+     * marked for duplicate check are a set the administrator configures, not a fixed count — the
+     * only way to require all of them to agree in one round trip is to build the {@code AND} chain
+     * at the width the configuration actually has. Only the chain's shape (its parameter count) is
+     * built from the configuration; every field name and value is bound as a parameter, never
+     * concatenated into the SQL text.
+     */
+    private Asset findByAllAttributeValues(UUID organizationId, AssetType assetType, Map<String, String> values) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM gis.assets a WHERE a.organization_id = "
+                + ":organizationId AND a.asset_type = :assetType");
+        int i = 0;
+        for (String ignored : values.keySet()) {
+            sql.append(" AND a.attributes ->> cast(:key").append(i).append(" as text) = cast(:value")
+                    .append(i).append(" as text)");
+            i++;
+        }
+        sql.append(" LIMIT 1");
+
+        jakarta.persistence.Query query = entityManager.createNativeQuery(sql.toString(), Asset.class)
+                .setParameter("organizationId", organizationId)
+                .setParameter("assetType", assetType.name());
+        i = 0;
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            query.setParameter("key" + i, entry.getKey());
+            query.setParameter("value" + i, entry.getValue());
+            i++;
+        }
+        @SuppressWarnings("unchecked")
+        List<Asset> results = query.getResultList();
+        return results.isEmpty() ? null : results.get(0);
     }
 
     /**
@@ -491,8 +659,12 @@ public class BulkImportService {
      * {@code gis.assets} requires it NOT NULL. A generated code is a worse asset than a mapped one
      * and a far better one than a failed row. Only applied to a genuinely new asset — an existing
      * one being replaced already has a code.
+     *
+     * <p>Also stamps {@link Asset#setImportRunId}, only on this same new-asset path — a row this
+     * run merely updated keeps whichever run (or none) created it, so deleting this run's data can
+     * never remove an asset that predates it.
      */
-    private void finishNewAsset(Asset asset, boolean isNew) {
+    private void finishNewAsset(Asset asset, boolean isNew, UUID runId) {
         if (!isNew) {
             return;
         }
@@ -502,6 +674,7 @@ public class BulkImportService {
         if (asset.getName() == null || asset.getName().isBlank()) {
             asset.setName(asset.getAssetCode());
         }
+        asset.setImportRunId(runId);
     }
 
     public JobStatus status(UUID jobId) {
@@ -518,10 +691,117 @@ public class BulkImportService {
 
     @Transactional(readOnly = true)
     public ImportRunDetail historyDetail(UUID organizationId, UUID id) {
-        ImportRun run = importRunRepository.findByIdAndOrganizationId(id, organizationId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
-                        "Import run not found."));
+        ImportRun run = requireRun(organizationId, id);
         return new ImportRunDetail(ImportRunSummary.from(run), run.getRowDetails());
+    }
+
+    // ---- Delete a run's imported data ---------------------------------------------------------
+
+    /**
+     * How many assets a delete would remove, without removing anything.
+     *
+     * <p>Exact when the run stamped its inserts with {@link Asset#getImportRunId()} — every run
+     * since V1338. A run from before that column existed has no such tag on anything it created, so
+     * this falls back to {@link AssetRepository#countByImportWindow}, the closest approximation
+     * available without a way to point back at exactly which rows a historical run wrote.
+     */
+    @Transactional(readOnly = true)
+    public DeletePreview deletePreview(UUID organizationId, UUID runId) {
+        ImportRun run = requireRun(organizationId, runId);
+        if (run.getImportedRows() == 0) {
+            return new DeletePreview(0, false);
+        }
+        long exact = assetRepository.countByImportRun(organizationId, runId);
+        if (exact > 0) {
+            return new DeletePreview(exact, false);
+        }
+        return new DeletePreview(estimateWindowCount(organizationId, run), true);
+    }
+
+    /**
+     * Deletes the assets this run created — never ones it only replaced, see {@link #finishNewAsset}
+     * — and records the outcome on the run itself so the history list can grey the action out rather
+     * than let it fire twice.
+     */
+    @Transactional
+    public DeletePreview deleteImportedData(UUID organizationId, UUID runId, UUID actorId,
+                                            String actorUsername, String clientIp) {
+        ImportRun run = requireRun(organizationId, runId);
+        if (run.getDataDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_PERMITTED,
+                    "This run's imported data was already deleted.");
+        }
+        if ("RUNNING".equals(run.getState())) {
+            throw new BusinessException(ErrorCode.OPERATION_NOT_PERMITTED,
+                    "This run is still in progress.");
+        }
+
+        int deleted = 0;
+        boolean estimated = false;
+        if (run.getImportedRows() > 0) {
+            long exact = assetRepository.countByImportRun(organizationId, runId);
+            if (exact > 0) {
+                deleted = assetRepository.deleteByImportRun(organizationId, runId);
+            } else {
+                estimated = true;
+                Instant from = windowStart(run);
+                Instant to = windowEnd(run);
+                deleted = assetRepository.deleteByImportWindow(organizationId, run.getAssetType(),
+                        run.getLayerId(), from, to);
+            }
+        }
+
+        run.setDataDeletedAt(Instant.now());
+        run.setDataDeletedBy(actorId);
+        run.setDeletedRowCount(deleted);
+        run.setDeletedRowEstimated(estimated);
+        importRunRepository.save(run);
+
+        auditService.record(AuditEvent.builder()
+                .organizationId(organizationId)
+                .actorUserId(actorId)
+                .actorUsername(actorUsername)
+                .eventType(AuditEventTypes.IMPORT_RUN_DATA_DELETED)
+                .category(AuditCategory.DATA)
+                .resourceType("gis.import_run")
+                .resourceId(run.getId().toString())
+                .success(true)
+                .message("Deleted " + deleted + " asset(s) imported by '" + run.getFileName() + "'"
+                        + (estimated ? " (best-effort match — run predates exact tracking)" : ""))
+                .clientIp(clientIp)
+                .metadata(Map.of(
+                        "deletedCount", String.valueOf(deleted),
+                        "estimated", String.valueOf(estimated),
+                        "fileName", run.getFileName() == null ? "" : run.getFileName()))
+                .build());
+
+        return new DeletePreview(deleted, estimated);
+    }
+
+    private long estimateWindowCount(UUID organizationId, ImportRun run) {
+        if (run.getFinishedAt() == null) {
+            return 0;
+        }
+        return assetRepository.countByImportWindow(organizationId, run.getAssetType(), run.getLayerId(),
+                windowStart(run), windowEnd(run));
+    }
+
+    /*
+     * A couple of seconds either side of the run's own started/finished timestamps, to absorb clock
+     * and transaction-commit skew at the boundaries without the window growing wide enough to start
+     * picking up an unrelated asset the same operator happened to create right before or after.
+     */
+    private static Instant windowStart(ImportRun run) {
+        return run.getStartedAt().minusSeconds(2);
+    }
+
+    private static Instant windowEnd(ImportRun run) {
+        return (run.getFinishedAt() == null ? run.getStartedAt() : run.getFinishedAt()).plusSeconds(2);
+    }
+
+    private ImportRun requireRun(UUID organizationId, UUID runId) {
+        return importRunRepository.findByIdAndOrganizationId(runId, organizationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Import run not found."));
     }
 
     // ---- Public types ------------------------------------------------------------------------
@@ -546,11 +826,22 @@ public class BulkImportService {
     ) {
     }
 
-    private record DuplicateCheckValue(String fieldName, String value) {
-    }
-
     /** The asset a row binds onto, and whether it is new or being replaced. */
     private record MatchedAsset(Asset asset, boolean isNew) {
+    }
+
+    /**
+     * What {@link #resolveTarget} decided for one row: either an asset to bind onto, or a reason
+     * the row was skipped instead (an in-file duplicate, or a code/attribute conflict).
+     */
+    private record RowResolution(MatchedAsset matched, String skipReason) {
+        static RowResolution matched(MatchedAsset matched) {
+            return new RowResolution(matched, null);
+        }
+
+        static RowResolution skip(String reason) {
+            return new RowResolution(null, reason);
+        }
     }
 
     /** Phase-1 result: the file's columns and sample rows. */
@@ -558,6 +849,18 @@ public class BulkImportService {
             List<String> columns,
             List<Map<String, String>> sampleRows,
             String format
+    ) {
+    }
+
+    /**
+     * What committing this file with this mapping would do, before anything is written — the
+     * counts behind the wizard's "N new, M replaced, D duplicates skipped — proceed?" prompt.
+     */
+    public record ImportPreview(
+            int totalRows,
+            int toCreate,
+            int toReplace,
+            int duplicatesSkipped
     ) {
     }
 
@@ -607,17 +910,26 @@ public class BulkImportService {
     public record ImportRunSummary(
             UUID id, UUID jobId, String fileName, String format, String assetType, UUID layerId,
             String state, int total, int imported, int replaced, int skipped, int failed,
-            String actorUsername, Instant startedAt, Instant finishedAt, String errorMessage
+            String actorUsername, Instant startedAt, Instant finishedAt, String errorMessage,
+            Instant dataDeletedAt, Integer deletedRowCount, Boolean deletedRowEstimated
     ) {
         static ImportRunSummary from(ImportRun run) {
             return new ImportRunSummary(run.getId(), run.getJobId(), run.getFileName(), run.getFormat(),
                     run.getAssetType(), run.getLayerId(), run.getState(), run.getTotalRows(),
                     run.getImportedRows(), run.getReplacedRows(), run.getSkippedRows(), run.getFailedRows(),
-                    run.getActorUsername(), run.getStartedAt(), run.getFinishedAt(), run.getErrorMessage());
+                    run.getActorUsername(), run.getStartedAt(), run.getFinishedAt(), run.getErrorMessage(),
+                    run.getDataDeletedAt(), run.getDeletedRowCount(), run.getDeletedRowEstimated());
         }
     }
 
     /** One import run's summary plus the per-row outcomes for its replaced/skipped/failed rows. */
     public record ImportRunDetail(ImportRunSummary summary, List<Map<String, Object>> rows) {
+    }
+
+    /**
+     * How many assets a delete would remove (or removed), and whether that count came from the
+     * exact {@code import_run_id} tag or the best-effort window match for a run that predates it.
+     */
+    public record DeletePreview(long count, boolean estimated) {
     }
 }

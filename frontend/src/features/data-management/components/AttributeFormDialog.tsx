@@ -440,7 +440,7 @@ export function AttributeFormDialog({
             />
             <FlagSwitch
               label="Consider for duplicate check"
-              hint="Bulk imports use this field (with Asset Code) to recognise a row already on file, and update it instead of adding a copy."
+              hint="Bulk imports use flagged fields (separately from Asset Code) to recognise a row already on file, and update it instead of adding a copy. Flag one field to match on it alone; flag several and a row must agree with an existing asset on all of them together."
               checked={form.duplicateCheck}
               disabled={isSystem}
               onChange={(value) => set('duplicateCheck', value)}

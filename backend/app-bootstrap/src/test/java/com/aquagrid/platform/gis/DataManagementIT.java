@@ -208,6 +208,117 @@ class DataManagementIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("multiple duplicate-check fields must all agree, and a conflicting match is skipped")
+    void duplicateCheckRequiresAllFlaggedFieldsToAgree() throws Exception {
+        UUID orgId = organizationId();
+        Layer meters = layer("meters");
+        String field1 = unique("consumer_no");
+        String field2 = unique("phase_code");
+
+        metadataService.create(orgId, null, "test", new AttributeCommands.Create(
+                meters.getId(), field1, "Consumer Number", null, AttributeDataType.TEXT, 40,
+                null, null, null, "TN-0001", false, false, true, true, true, true, null, null));
+        metadataService.create(orgId, null, "test", new AttributeCommands.Create(
+                meters.getId(), field2, "Phase Code", null, AttributeDataType.TEXT, 10,
+                null, null, null, "R", false, false, true, true, true, true, null, null));
+
+        String codeA1 = unique("DM-DUP-A1").toUpperCase();
+        String codeA2 = unique("DM-DUP-A2").toUpperCase();
+        Map<String, String> fullMapping =
+                Map.of("Code", "asset_code", "C1", field1, "C2", field2, "X", "lon", "Y", "lat");
+
+        // Row 1: creates asset A1 with both flagged fields set.
+        runAndAwait(orgId, meters.getId(), fullMapping, "Code,C1,C2,X,Y\n%s,V1,V2,78.10,11.60\n"
+                .formatted(codeA1), status -> assertThat(status.imported).isEqualTo(1));
+
+        // Row 2: no asset_code mapped, but both flagged fields match A1 exactly — updates it.
+        Map<String, String> attrsOnlyMapping = Map.of("C1", field1, "C2", field2, "X", "lon", "Y", "lat");
+        runAndAwait(orgId, meters.getId(), attrsOnlyMapping, "C1,C2,X,Y\nV1,V2,78.11,11.61\n",
+                status -> assertThat(status.replaced).isEqualTo(1));
+
+        // Row 3: both fields mapped, but the row is silent on the second one — a partial match is
+        // not a match, so this is a new asset rather than being merged onto A1.
+        runAndAwait(orgId, meters.getId(), attrsOnlyMapping, "C1,C2,X,Y\nV1,,78.12,11.62\n",
+                status -> assertThat(status.imported).isEqualTo(1));
+
+        // Row 4: creates a second, unrelated asset A2.
+        runAndAwait(orgId, meters.getId(), fullMapping, "Code,C1,C2,X,Y\n%s,V3,V4,78.20,11.70\n"
+                .formatted(codeA2), status -> assertThat(status.imported).isEqualTo(1));
+
+        // Row 5: asset_code matches A2, but the flagged fields match A1 — two different existing
+        // assets. Neither is touched; the row is skipped and says why.
+        runAndAwait(orgId, meters.getId(), fullMapping, "Code,C1,C2,X,Y\n%s,V1,V2,78.21,11.71\n"
+                .formatted(codeA2), status -> {
+                    assertThat(status.skipped).isEqualTo(1);
+                    assertThat(status.imported).isZero();
+                    assertThat(status.replaced).isZero();
+                    assertThat(status.rows).singleElement().satisfies(row -> {
+                        assertThat(row.outcome()).isEqualTo("SKIPPED");
+                        assertThat(row.message()).contains("two different existing assets");
+                    });
+                });
+
+        // A1 and A2 are still exactly what they were — the conflicting row updated neither.
+        Asset a1 = assetRepository.findByOrganizationIdAndAssetCode(orgId, codeA1).orElseThrow();
+        Asset a2 = assetRepository.findByOrganizationIdAndAssetCode(orgId, codeA2).orElseThrow();
+        assertThat(a1.getAttributes()).containsEntry(field1, "V1").containsEntry(field2, "V2");
+        assertThat(a2.getAttributes()).containsEntry(field1, "V3").containsEntry(field2, "V4");
+        assertThat(a1.getId()).isNotEqualTo(a2.getId());
+    }
+
+    @Test
+    @DisplayName("preview reports new/replace/duplicate counts without writing anything")
+    void previewReportsCountsWithoutWriting() throws Exception {
+        UUID orgId = organizationId();
+        Layer meters = layer("meters");
+        String assetCode = unique("DM-PREVIEW").toUpperCase();
+        Map<String, String> mapping = Map.of("Code", "asset_code", "X", "lon", "Y", "lat");
+
+        long before = assetRepository.count();
+
+        // One row creates A; the second row repeats A's code within the same file (in-file
+        // duplicate); the third row is a genuinely new asset.
+        String csv = """
+                Code,X,Y
+                %s,78.10,11.60
+                %s,78.11,11.61
+                %s,78.12,11.62
+                """.formatted(assetCode, assetCode, unique("DM-PREVIEW-NEW").toUpperCase());
+
+        BulkImportService.ImportPreview firstPass =
+                importService.preview(orgId, "text/csv", csv.getBytes(StandardCharsets.UTF_8),
+                        AssetType.METER, mapping);
+        assertThat(firstPass.totalRows()).isEqualTo(3);
+        assertThat(firstPass.toCreate()).isEqualTo(2);
+        assertThat(firstPass.toReplace()).isZero();
+        assertThat(firstPass.duplicatesSkipped()).isEqualTo(1);
+        // Nothing was written — same asset count as before the preview.
+        assertThat(assetRepository.count()).isEqualTo(before);
+
+        // Actually import the first row, then preview a re-import of the same code: now a replace.
+        runAndAwait(orgId, meters.getId(), mapping, "Code,X,Y\n%s,78.10,11.60\n".formatted(assetCode),
+                status -> assertThat(status.imported).isEqualTo(1));
+
+        BulkImportService.ImportPreview secondPass =
+                importService.preview(orgId, "text/csv", csv.getBytes(StandardCharsets.UTF_8),
+                        AssetType.METER, mapping);
+        assertThat(secondPass.toCreate()).isEqualTo(1);
+        assertThat(secondPass.toReplace()).isEqualTo(1);
+        assertThat(secondPass.duplicatesSkipped()).isEqualTo(1);
+    }
+
+    /** Runs one import job to completion and hands the final status to the assertion. */
+    private void runAndAwait(UUID orgId, UUID layerId, Map<String, String> mapping, String csv,
+                             java.util.function.Consumer<BulkImportService.JobStatus> assertion)
+            throws InterruptedException {
+        UUID jobId = UUID.randomUUID();
+        importService.runImport(jobId, orgId, null, "test", "meters.csv", "text/csv",
+                csv.getBytes(StandardCharsets.UTF_8), AssetType.METER, layerId, mapping);
+        awaitImport(jobId);
+        assertion.accept(importService.status(jobId));
+    }
+
+    @Test
     @DisplayName("retiring a field hides it from exports without destroying a single value")
     void retiringHidesTheFieldAndKeepsTheData() throws Exception {
         UUID orgId = organizationId();
