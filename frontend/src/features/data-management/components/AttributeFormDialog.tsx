@@ -58,9 +58,9 @@ const EMPTY: FormState = {
   mandatory: false,
   unique: false,
   duplicateCheck: false,
-  editable: true,
-  visible: true,
-  active: true,
+  editable: false,
+  visible: false,
+  active: false,
   changeReason: '',
 };
 
