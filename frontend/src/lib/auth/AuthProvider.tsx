@@ -31,11 +31,26 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 /** Refresh this many seconds before the token actually expires. */
 const REFRESH_SKEW_SECONDS = 60;
 
+/**
+ * Sign out after this long with no user interaction.
+ *
+ * The refresh token keeps a session alive indefinitely as long as it's used at least once
+ * within its window — there is otherwise nothing that ever signs out a device left open and
+ * unattended. This is that control.
+ */
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** Interaction events that count as "the user is still here". Deliberately not `mousemove` —
+ *  too frequent to be a meaningful throttle target, and switching tabs shouldn't count either. */
+const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'wheel', 'touchstart', 'scroll'] as const;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [initialising, setInitialising] = useState(true);
   const queryClient = useQueryClient();
   const refreshTimer = useRef<number | null>(null);
+  const idleTimer = useRef<number | null>(null);
+  const isAuthenticated = Boolean(user);
 
   const clearSession = useCallback(() => {
     tokenStore.clear();
@@ -104,6 +119,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   /*
+   * Idle auto-logout.
+   *
+   * Runs only while authenticated: the timer starts (or restarts) on every qualifying
+   * interaction and, if none arrives for IDLE_TIMEOUT_MS, signs the user out. This is what
+   * closes the gap a purely sliding refresh-token window leaves open — a device that's
+   * signed in and left unattended.
+   */
+  useEffect(() => {
+    if (!isAuthenticated) {
+      if (idleTimer.current) {
+        window.clearTimeout(idleTimer.current);
+        idleTimer.current = null;
+      }
+      return;
+    }
+
+    const resetIdleTimer = () => {
+      if (idleTimer.current) window.clearTimeout(idleTimer.current);
+      idleTimer.current = window.setTimeout(() => {
+        void signOut();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    resetIdleTimer();
+    ACTIVITY_EVENTS.forEach((event) => window.addEventListener(event, resetIdleTimer, { passive: true }));
+
+    return () => {
+      ACTIVITY_EVENTS.forEach((event) => window.removeEventListener(event, resetIdleTimer));
+      if (idleTimer.current) {
+        window.clearTimeout(idleTimer.current);
+        idleTimer.current = null;
+      }
+    };
+  }, [isAuthenticated, signOut]);
+
+  /*
    * Silent bootstrap.
    *
    * The access token lives in memory only, so a reload starts with nothing. The HttpOnly
@@ -144,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       initialising,
-      isAuthenticated: Boolean(user),
+      isAuthenticated,
       applyAuthentication,
       signOut,
       refreshUser,
@@ -156,7 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasPermission: (permission: string) => permissions.has(permission),
       hasAnyPermission: (required: string[]) => required.some((p) => permissions.has(p)),
     }),
-    [user, initialising, applyAuthentication, signOut, refreshUser, permissions],
+    [user, initialising, isAuthenticated, applyAuthentication, signOut, refreshUser, permissions],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

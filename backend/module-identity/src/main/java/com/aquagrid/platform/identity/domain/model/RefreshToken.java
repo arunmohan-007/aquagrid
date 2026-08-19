@@ -49,7 +49,15 @@ public class RefreshToken {
     @Column(name = "family_id", nullable = false, updatable = false)
     private UUID familyId;
 
-    
+    /**
+     * When this token's family — one login on one device — was born. Copied unchanged onto every
+     * successor produced by rotation, so it lets an absolute session-age cap be enforced from the
+     * original login, independent of the sliding per-token {@code expires_at}.
+     */
+    @Column(name = "family_started_at", nullable = false, updatable = false)
+    private Instant familyStartedAt;
+
+
     @Column(name = "token_hash", nullable = false, length = 64, updatable = false)
     private String tokenHash;
 

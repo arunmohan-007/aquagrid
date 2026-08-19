@@ -66,7 +66,8 @@ public class RefreshTokenService {
     public IssuedRefreshToken issueNewFamily(User user, String clientIp, String userAgent,
                                              String deviceLabel) {
         enforceSessionLimit(user);
-        return persist(user, UUID.randomUUID(), clientIp, userAgent, deviceLabel);
+        Instant now = clock.instant();
+        return persist(user, UUID.randomUUID(), now, clientIp, userAgent, deviceLabel);
     }
 
     /**
@@ -102,14 +103,21 @@ public class RefreshTokenService {
                     "Your session has expired. Please sign in again.");
         }
 
+        Instant familyStartedAt = existing.getFamilyStartedAt();
+        if (familyStartedAt.plus(properties.refreshToken().absoluteTtl()).isBefore(now)) {
+            repository.revokeFamily(existing.getFamilyId(), now, TokenRevocationReason.EXPIRED);
+            throw new BusinessException(ErrorCode.AUTH_TOKEN_EXPIRED,
+                    "Your session has expired. Please sign in again.");
+        }
+
         User user = existing.getUser();
         if (!user.canAuthenticate(now)) {
             repository.revokeAllForUser(user.getId(), now, TokenRevocationReason.USER_DISABLED);
             throw new BusinessException(ErrorCode.AUTH_ACCOUNT_DISABLED);
         }
 
-        IssuedRefreshToken successor =
-                persist(user, existing.getFamilyId(), clientIp, userAgent, existing.getDeviceLabel());
+        IssuedRefreshToken successor = persist(user, existing.getFamilyId(), familyStartedAt, clientIp,
+                userAgent, existing.getDeviceLabel());
 
         existing.setLastUsedAt(now);
         existing.setReplacedById(successor.entity().getId());
@@ -183,14 +191,15 @@ public class RefreshTokenService {
         token.revoke(clock.instant(), TokenRevocationReason.ADMIN_REVOKED);
     }
 
-    private IssuedRefreshToken persist(User user, UUID familyId, String clientIp, String userAgent,
-                                       String deviceLabel) {
+    private IssuedRefreshToken persist(User user, UUID familyId, Instant familyStartedAt, String clientIp,
+                                       String userAgent, String deviceLabel) {
         Instant now = clock.instant();
         String plaintext = TokenGenerator.opaqueToken();
 
         RefreshToken token = new RefreshToken();
         token.setUser(user);
         token.setFamilyId(familyId);
+        token.setFamilyStartedAt(familyStartedAt);
         token.setTokenHash(Hashes.sha256Hex(plaintext));
         token.setIssuedAt(now);
         token.setExpiresAt(now.plus(properties.refreshToken().ttl()));

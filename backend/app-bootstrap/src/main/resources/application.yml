@@ -174,6 +174,8 @@ aquagrid:
       cleanup-grace-period: 7d
       cleanup-cron: "0 30 3 * * *"
       max-sessions-per-user: 10
+      # Absolute cap on a session's age from original login, independent of the sliding ttl above.
+      absolute-ttl: 30d
     rate-limit:
       login-attempts-per-ip: 30
       login-attempts-per-identifier: 10

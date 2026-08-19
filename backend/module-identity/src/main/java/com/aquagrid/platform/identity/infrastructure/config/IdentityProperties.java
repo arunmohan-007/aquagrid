@@ -62,6 +62,11 @@ public record IdentityProperties(
      *                {@code /logout}.
      * @param sameSite {@code Strict}: the browser will not send this cookie on any cross-site
      *                 request, which is what makes disabling CSRF protection safe.
+     * @param absoluteTtl ceiling on a session's total age, measured from the original login rather
+     *                    than from the last refresh. {@code ttl} alone is a sliding window: a
+     *                    session used at least once every {@code ttl} renews indefinitely. This
+     *                    caps that, forcing re-authentication after {@code absoluteTtl} regardless
+     *                    of activity.
      */
     public record RefreshToken(
             @NotNull Duration ttl,
@@ -71,7 +76,8 @@ public record IdentityProperties(
             @NotBlank String sameSite,
             String domain,
             @NotNull Duration cleanupGracePeriod,
-            @Min(1) int maxSessionsPerUser
+            @Min(1) int maxSessionsPerUser,
+            @NotNull Duration absoluteTtl
     ) {
         public RefreshToken {
             ttl = ttl == null ? Duration.ofDays(14) : ttl;
@@ -80,6 +86,13 @@ public record IdentityProperties(
             sameSite = sameSite == null || sameSite.isBlank() ? "Strict" : sameSite;
             cleanupGracePeriod = cleanupGracePeriod == null ? Duration.ofDays(7) : cleanupGracePeriod;
             maxSessionsPerUser = maxSessionsPerUser == 0 ? 10 : maxSessionsPerUser;
+            absoluteTtl = absoluteTtl == null ? Duration.ofDays(30) : absoluteTtl;
+
+            if (absoluteTtl.compareTo(ttl) < 0) {
+                throw new IllegalArgumentException(
+                        "aquagrid.identity.refresh-token.absolute-ttl must not be shorter than ttl: "
+                                + "it caps the sliding window, not the other way round");
+            }
         }
     }
 
